@@ -122,3 +122,21 @@ async function internalConnect(isAuto) {
 export async function autoConnectSSS() {
   await internalConnect(true);
 }
+
+/* ------------------------------------------------------
+  SSS署名
+------------------------------------------------------ */
+export async function signTransaction(transaction) {
+
+  if (!window.SSS) {
+    throw new Error("SSS Extension未接続");
+  }
+
+
+  const signed =
+    await window.SSS.requestSign(transaction);
+
+
+  return signed;
+
+}
