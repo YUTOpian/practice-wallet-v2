@@ -60,10 +60,13 @@ export async function startHarvest() {
     /*
       AccountKeyLinkTransaction
     */
-    const descriptor = new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
-      appState.currentPubKey,
-      appState.sdkSymbol.models.LinkAction.Link
-    );
+    const descriptor =
+  new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
+    {
+      linkedPublicKey: linkedPublicKey,
+      linkAction: appState.sdkSymbol.models.LinkAction.Link
+    }
+  );
 
     const tx = appState.facade.createTransactionFromTypedDescriptor(
       descriptor,
