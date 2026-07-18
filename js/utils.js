@@ -82,3 +82,15 @@ export function formatMosaicAmount(amount, divisibility = 0) {
   );
 
 }
+
+export function hexToUint8Array(hex) {
+  const bytes = [];
+
+  for(let i = 0; i < hex.length; i += 2){
+    bytes.push(
+      parseInt(hex.substring(i, i + 2), 16)
+    );
+  }
+
+  return new Uint8Array(bytes);
+}
