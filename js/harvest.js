@@ -42,51 +42,6 @@ export async function checkHarvestStatus() {
 }
 
 
-//import { appState } from "./config.js";
-
-/* ============================================================
-   ハーベスト状態確認
-============================================================ */
-export async function checkHarvestStatus() {
-  const statusEl = document.getElementById("harvest-status");
-  const importanceEl = document.getElementById("harvest-importance");
-  if (!statusEl) return;
-
-  try {
-    statusEl.textContent = "状態確認中...";
-
-    const address = appState.currentAddress.toString();
-    const res = await fetch(`${appState.NODE}/accounts/${address}`);
-    const json = await res.json();
-    const account = json.account;
-
-    if (!account) {
-      statusEl.textContent = "アカウント情報取得失敗";
-      return;
-    }
-
-    /*
-      importance確認・反映
-    */
-    const importance = account.importance;
-    console.log("importance:", importance);
-
-    if (importanceEl) {
-      // 読みやすくするため必要に応じてフォーマットするか、そのまま表示
-      importanceEl.textContent = importance ? BigInt(importance).toString() : "0";
-    }
-
-    if (importance && Number(importance) > 0) {
-      statusEl.textContent = "✅ ハーベスト可能状態";
-    } else {
-      statusEl.textContent = "❌ ハーベスト未設定";
-    }
-  } catch (e) {
-    console.error("Harvest status error:", e);
-    statusEl.textContent = "状態取得エラー";
-  }
-}
-
 /* ============================================================
    委任ハーベスト開始
 ============================================================ */
