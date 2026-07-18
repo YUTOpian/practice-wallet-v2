@@ -1,10 +1,10 @@
+// index.js
+
 import { appState } from "./config.js";
 import { autoConnectSSS } from "./sss.js";
-import { refreshAccount } from "./account.js";
 import { sendTx } from "./transfer.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
-import { initSdk } from "./sdk.js";
 import { showPopup } from "./utils.js";
 import { checkHarvestStatus, startHarvest } from "./harvest.js";
 import QRCode from "https://esm.sh/qrcode";
@@ -22,12 +22,6 @@ window.addEventListener("load", async () => {
   }
 
   // ============================
-  // SDK初期化
-  // ============================
-  await initSdk();
-  await refreshAccount();
-
-  // ============================
   // ページ取得
   // ============================
   const accountPage = document.getElementById("account-page");
@@ -40,7 +34,9 @@ window.addEventListener("load", async () => {
   // ページ切替
   // ============================
   function showPage(page) {
-    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(p => {
+      p.classList.remove("active");
+    });
     page.classList.add("active");
   }
 
@@ -84,8 +80,8 @@ window.addEventListener("load", async () => {
   document.getElementById("receive-btn")?.addEventListener("click", async () => {
     showPage(receivePage);
     const address = appState.currentAddress.toString();
+    
     document.getElementById("receive-address").textContent = address;
-
     const qr = document.getElementById("receive-qrcode");
     qr.innerHTML = "";
 
@@ -93,7 +89,7 @@ window.addEventListener("load", async () => {
       width: 220,
       margin: 1
     });
-    qr.innerHTML = `<img src="${dataUrl}">`;
+    qr.innerHTML = `<img src="${dataUrl}" alt="QR Code">`;
   });
 
   // ============================
@@ -103,8 +99,8 @@ window.addEventListener("load", async () => {
     showPage(harvestPage);
     const address = appState.currentAddress.toString();
     document.getElementById("harvest-address").textContent = address;
-
-    await checkHarvestStatus(address);
+    
+    await checkHarvestStatus();
   });
 
   // ============================
@@ -120,7 +116,7 @@ window.addEventListener("load", async () => {
   document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
 
   // ============================
-  // コピー
+  // アドレスコピー
   // ============================
   document.getElementById("copy-address-btn")?.addEventListener("click", () => {
     navigator.clipboard.writeText(appState.currentAddress.toString());
@@ -128,7 +124,7 @@ window.addEventListener("load", async () => {
   });
 
   // ============================
-  // Tx履歴
+  // Tx履歴・WebSocket
   // ============================
   await loadRecentTx();
 
