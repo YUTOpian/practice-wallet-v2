@@ -62,3 +62,23 @@ export function playSoundOnce(file) {
       });
     });
 }
+
+// ============================================================
+// モザイク数量表示フォーマット
+// ============================================================
+
+export function formatMosaicAmount(amount, divisibility = 0) {
+
+  const value =
+    Number(amount) /
+    (10 ** divisibility);
+
+
+  return value.toLocaleString(
+    "ja-JP",
+    {
+      maximumFractionDigits: divisibility
+    }
+  );
+
+}
