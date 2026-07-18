@@ -108,13 +108,14 @@ window.addEventListener("load", async () => {
   // ============================
   document.getElementById("start-harvest-btn")?.addEventListener("click", startHarvest);
 
-  // ============================
-  // 戻る
-  // ============================
-  document.getElementById("back-account")?.addEventListener("click", () => showPage(accountPage));
-  document.getElementById("back-account-receive")?.addEventListener("click", () => showPage(accountPage));
-  document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
-
+// ============================
+// 戻る
+// ============================
+document.getElementById("back-account")?.addEventListener("click", () => showPage(accountPage));
+document.getElementById("back-send")?.addEventListener("click", () => showPage(sendPage));
+document.getElementById("back-account-receive")?.addEventListener("click", () => showPage(accountPage));
+document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
+  
   // ============================
   // アドレスコピー
   // ============================
