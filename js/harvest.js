@@ -56,8 +56,10 @@ export async function startHarvest() {
     if (!appState.currentPubKey) {
       throw new Error("公開鍵取得失敗");
     }
-     const linkedPublicKey = appState.currentPubKey;
-
+     const linkedPublicKey =
+  new appState.sdkSymbol.models.PublicKey(
+    appState.currentPubKey
+  );
     /*
       AccountKeyLinkTransaction
     */
