@@ -72,11 +72,7 @@ export async function startHarvest() {
     );
     console.log("descriptor:", descriptor);
 
-    /*
-      署名者公開鍵
-    */
-    const signerPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyBytes);
-
+   
     /*
       Transaction生成
     */
