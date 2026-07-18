@@ -57,29 +57,32 @@ export async function startHarvest() {
       throw new Error("公開鍵取得失敗");
     }
 
-// 公開鍵を32byte配列へ変換
-const publicKeyBytes =
-  hexToUint8Array(appState.currentPubKey);
-
-
-// AccountKeyLink descriptor
-const descriptor =
-  new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
-    publicKeyBytes,
-    appState.sdkSymbol.models.LinkAction.Link
-  );
+    /*
+      公開鍵を32byteへ変換
+    */
+    const publicKeyBytes = hexToUint8Array(appState.currentPubKey);
+    console.log("publicKey bytes:", publicKeyBytes.length);
 
     /*
-      署名者 = 自分の公開鍵
+      AccountKeyLink Transaction descriptor
+      ※型定義のプレーンオブジェクトとして指定
     */
-    const signerPublicKey =
-  new appState.sdkSymbol.models.PublicKey(
-    hexToUint8Array(appState.currentPubKey)
-  );
+    const descriptor = {
+      linkedPublicKey: publicKeyBytes,
+      linkAction: appState.sdkSymbol.models.LinkAction.Link
+    };
 
+    /*
+      署名者公開鍵
+    */
+    const signerPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyBytes);
+
+    /*
+      Transaction生成
+    */
     const tx = appState.facade.createTransactionFromTypedDescriptor(
       descriptor,
-      appState.currentAddress,
+      signerPublicKey,
       100,
       60 * 60
     );
