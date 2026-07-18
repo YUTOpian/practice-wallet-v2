@@ -1,5 +1,7 @@
 // sss.js
-// SSS Extension との接続と、それを起点にした Node / SDK の初期化
+// SSS Extension との接続
+// Node / SDK 初期化
+// トランザクション署名処理
 
 import { appState, NetworkType } from "./config.js";
 import { selectNode } from "./nodeSelector.js";
@@ -9,32 +11,30 @@ import { refreshAccount } from "./account.js";
 import { loadRecentTx } from "./transactions.js";
 
 /* ------------------------------------------------------
-  ネットワーク名表示
+   ネットワーク名表示
 ------------------------------------------------------ */
 function networkLabel(nt) {
   return nt === NetworkType.TESTNET ? "Testnet" : "Mainnet";
 }
 
 /* ------------------------------------------------------
-  多重実行防止 + ネットワーク確定フラグ
+   接続制御
 ------------------------------------------------------ */
 let isConnecting = false;
-//let isConnectedOnce = false;        // ← 1回だけ実行
-let lockedNetworkType = null;       // ← 途中で Testnet に変わらないようロック
+let lockedNetworkType = null;
 
 /* ------------------------------------------------------
-  内部接続処理（自動 / 手動どちらも利用）
+   SSS接続本体
 ------------------------------------------------------ */
 async function internalConnect(isAuto) {
-
-  // --- 完全に1回だけ実行 ---
   if (isConnecting) return;
   isConnecting = true;
 
   try {
-    // SSS 未インストール
     if (!window.SSS) {
-      if (!isAuto) setStatus("sss-status", "SSS Extension が見つかりません。", "error");
+      if (!isAuto) {
+        setStatus("sss-status", "SSS Extension が見つかりません。", "error");
+      }
       return;
     }
 
@@ -46,37 +46,39 @@ async function internalConnect(isAuto) {
 
     if (!pubKey || ![NetworkType.MAINNET, NetworkType.TESTNET].includes(detectedNetworkType)) {
       if (!isAuto) {
-        setStatus("sss-status", "SSS のポップアップでアカウントを選択してください。", "error");
+        setStatus("sss-status", "SSSでアカウントを選択してください。", "error");
       }
       return;
     }
 
-    // --- ネットワークタイプをロックする（以降は変更しない） ---
-    if (!lockedNetworkType) lockedNetworkType = detectedNetworkType;
-    const networkType = lockedNetworkType;
+    /*
+      ネットワーク固定
+    */
+    if (!lockedNetworkType) {
+      lockedNetworkType = detectedNetworkType;
+    }
 
-    // --- 状態をセット ---
+    const networkType = lockedNetworkType;
     appState.currentPubKey = pubKey;
     appState.networkType = networkType;
 
-    const isTestnet = networkType === NetworkType.TESTNET;
     setText("network-label", networkLabel(networkType));
 
-    /* ------------------------------------------------------
-      1. NodeWatch でノード選択
-    ------------------------------------------------------ */
+    /*
+      Node取得
+    */
+    const isTestnet = networkType === NetworkType.TESTNET;
     appState.NODE = await selectNode(isTestnet);
+    console.log("Selected NODE:", appState.NODE);
 
-    console.log("sss.js  Selected NODE:", appState.NODE);
-
-    /* ------------------------------------------------------
-      2. SDK 初期化（選択した NODE に接続）
-    ------------------------------------------------------ */
+    /*
+      SDK初期化
+    */
     await initSdk();
 
-    /* ------------------------------------------------------
-      3. アカウント生成
-    ------------------------------------------------------ */
+    /*
+      Account生成
+    */
     const pub = new appState.sdkCore.PublicKey(pubKey);
     const publicAccount = appState.facade.createPublicAccount(pub);
     appState.currentAddress = publicAccount.address;
@@ -84,25 +86,17 @@ async function internalConnect(isAuto) {
     setText("account-address", publicAccount.address.toString());
     setStatus("sss-status", "SSS と接続済み", "success");
 
-    /* ------------------------------------------------------
-      4. UI ボタンの有効化（存在する要素のみ）
-    ------------------------------------------------------ */
+    /*
+      ボタン有効化
+    */
     ["btn-transfer", "btn-update-meta"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.disabled = false;
     });
 
-    /* ------------------------------------------------------
-      5. アカウント情報 / TX を読み込み
-    ------------------------------------------------------ */
     await refreshAccount();
-
     await loadRecentTx();
-
-    // --- 完全に接続完了 ---
-    //isConnectedOnce = true;
-
-  } catch (e) {
+  } catch(e) {
     console.error("internalConnect error:", e);
   } finally {
     isConnecting = false;
@@ -110,33 +104,31 @@ async function internalConnect(isAuto) {
 }
 
 /* ------------------------------------------------------
-  手動接続ボタン用
------------------------------------------------------- */
-/*export async function connectSSS() {
-  await internalConnect(false);
-}*/
-
-/* ------------------------------------------------------
-  自動接続（activePublicKey があれば即接続）
+   自動接続
 ------------------------------------------------------ */
 export async function autoConnectSSS() {
   await internalConnect(true);
 }
 
-/* ------------------------------------------------------
-  SSS署名
------------------------------------------------------- */
+/* ======================================================
+   SSS署名処理
+====================================================== */
+/*
+  作成したTransactionをSSS Extensionで署名する
+  harvest.js, transfer.js, metadata.js から利用
+*/
 export async function signTransaction(transaction) {
-
   if (!window.SSS) {
-    throw new Error("SSS Extension未接続");
+    throw new Error("SSS Extension がありません");
   }
 
+  if (!transaction) {
+    throw new Error("署名対象Transactionがありません");
+  }
 
-  const signed =
-    await window.SSS.requestSign(transaction);
+  console.log("SSS署名開始", transaction);
+  const signedTransaction = await window.SSS.signTransaction(transaction);
+  console.log("署名完了", signedTransaction);
 
-
-  return signed;
-
+  return signedTransaction;
 }
