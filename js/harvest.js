@@ -1,3 +1,47 @@
+// harvest.js
+
+import { appState } from "./config.js";
+import { hexToUint8Array } from "./utils.js";
+
+/* ============================================================
+   ハーベスト状態確認
+============================================================ */
+export async function checkHarvestStatus() {
+  const statusEl = document.getElementById("harvest-status");
+  const importanceEl = document.getElementById("harvest-importance");
+  if (!statusEl) return;
+
+  try {
+    statusEl.textContent = "状態確認中...";
+
+    const address = appState.currentAddress.toString();
+    const res = await fetch(`${appState.NODE}/accounts/${address}`);
+    const json = await res.json();
+    const account = json.account;
+
+    if (!account) {
+      statusEl.textContent = "アカウント情報取得失敗";
+      return;
+    }
+
+    const importance = account.importance;
+    console.log("importance:", importance);
+
+    if (importanceEl) {
+      importanceEl.textContent = importance ? BigInt(importance).toString() : "0";
+    }
+
+    if (importance && Number(importance) > 0) {
+      statusEl.textContent = "✅ ハーベスト可能状態";
+    } else {
+      statusEl.textContent = "❌ ハーベスト未設定";
+    }
+  } catch (e) {
+    console.error("Harvest status error:", e);
+    statusEl.textContent = "状態取得エラー";
+  }
+}
+
 /* ============================================================
    委任ハーベスト開始
 ============================================================ */
@@ -14,34 +58,22 @@ export async function startHarvest() {
     }
 
     /*
-      公開鍵 HEX → Uint8Array(32byte)
+      公開鍵HEX → Uint8Array
     */
-    const publicKeyHex = appState.currentPubKey;
-    const publicKeyBytes = hexToUint8Array(publicKeyHex);
-    console.log("publicKeyBytes:", publicKeyBytes, publicKeyBytes.length);
-
-    if (publicKeyBytes.length !== 32) {
-      throw new Error("公開鍵サイズ異常: " + publicKeyBytes.length);
-    }
+    const publicKeyBytes = hexToUint8Array(appState.currentPubKey);
+    console.log("publicKey length:", publicKeyBytes.length);
 
     /*
-      AccountKeyLink用 PublicKey
-    */
-    const linkedPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyBytes);
-    console.log("linkedPublicKey:", linkedPublicKey);
-
-    /*
-      AccountKeyLinkTransaction Descriptor
-      SDK v3: constructor(linkedPublicKey, linkAction)
+      AccountKeyLinkTransaction
     */
     const descriptor = new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
-      linkedPublicKey,
+      new appState.sdkSymbol.models.PublicKey(publicKeyBytes),
       appState.sdkSymbol.models.LinkAction.Link
     );
     console.log("descriptor:", descriptor);
 
     /*
-      署名者PublicKey
+      署名者公開鍵
     */
     const signerPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyBytes);
 
