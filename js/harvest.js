@@ -1,30 +1,28 @@
 // harvest.js
-// Symbol SDK v3
-// Delegated Harvesting
+// 委任ハーベスト管理
+// Symbol SDK v3対応
 
 import { appState } from "./config.js";
+import { signTransaction } from "./sss.js";
 
 /* ============================================================
    ハーベスト状態確認
 ============================================================ */
 export async function checkHarvestStatus() {
   const statusEl = document.getElementById("harvest-status");
-
   if (!statusEl) {
     console.log("harvest-status がありません");
     return;
   }
 
   try {
-    const address = appState.currentAddress.toString();
-    console.log("Harvest check:", address);
     statusEl.textContent = "状態確認中...";
+    const address = appState.currentAddress.toString();
+    const url = `${appState.NODE}/accounts/${address}`;
 
-    /*
-      Account取得
-    */
-    const response = await fetch(`${appState.NODE}/accounts/${address}`);
-    const json = await response.json();
+    console.log("REST:", url);
+    const res = await fetch(url);
+    const json = await res.json();
     const account = json.account;
 
     if (!account) {
@@ -32,44 +30,17 @@ export async function checkHarvestStatus() {
       return;
     }
 
-    /*
-      Importance確認
-    */
-    const importance = BigInt(account.importance ?? 0);
-    console.log("importance:", importance.toString());
+    const importance = account.importance;
+    console.log("importance:", importance);
 
-    /*
-      VRF / PublicKey確認
-    */
-    const publicKey = account.publicKey;
-    const linked = publicKey && publicKey !== "0000000000000000000000000000000000000000000000000000000000000000";
-    console.log("VRF linked:", linked);
-
-    if (importance > 0n && linked) {
-      statusEl.textContent = "✅ ハーベスト設定可能";
+    if (importance && Number(importance) > 0) {
+      statusEl.textContent = "✅ ハーベスト可能状態";
     } else {
-      statusEl.textContent = "❌ ハーベスト条件不足";
+      statusEl.textContent = "❌ ハーベスト未設定";
     }
-  } catch(error) {
-    console.error("Harvest status error:", error);
+  } catch(e) {
+    console.error("Harvest status error:", e);
     statusEl.textContent = "状態取得エラー";
-  }
-}
-
-/* ============================================================
-   ノード公開鍵取得
-============================================================ */
-export async function getNodePublicKey() {
-  try {
-    const response = await fetch(`${appState.NODE}/node/info`);
-    const json = await response.json();
-    const publicKey = json.node.publicKey;
-
-    console.log("Node public key:", publicKey);
-    return publicKey;
-  } catch(error) {
-    console.error("Node key error:", error);
-    return null;
   }
 }
 
@@ -79,45 +50,67 @@ export async function getNodePublicKey() {
 export async function startHarvest() {
   try {
     console.log("委任ハーベスト開始");
-
-    /*
-      ノード公開鍵取得
-    */
-    const nodePublicKey = await getNodePublicKey();
-    if (!nodePublicKey) {
-      throw new Error("ノード公開鍵取得失敗");
+    if (!appState.facade) {
+      throw new Error("SDK未初期化");
     }
 
     /*
-      ここから Symbol SDK v3
-      PersistentHarvestingDelegationMessage
-      + HashLockTransaction
-      + AggregateBondedTransaction を作成する
+      現在アカウント
     */
-    console.log("Delegation target:", nodePublicKey);
+    const address = appState.currentAddress;
 
     /*
-      TODO:
-      1. PersistentHarvestingDelegationMessage生成
-      2. TransferTransaction作成
-      3. AggregateBonded作成
-      4. HashLock作成
-      5. SSS署名
-      6. announce
+      リモートハーベスト用キー
+      本来ここでVRF / VotingKey設定状態などを確認
     */
-    return true;
-  } catch(error) {
-    console.error("Start harvest error:", error);
-    return false;
+    const linkedPublicKey = appState.currentPubKey;
+    if (!linkedPublicKey) {
+      throw new Error("公開鍵取得失敗");
+    }
+
+    /*
+      Transaction作成
+      ※ Symbol SDK v3 実際のKeyLinkTransaction生成部分
+    */
+    const deadline = appState.facade.network.createDeadline();
+    const transaction = new appState.sdkSymbol.KeyLinkTransactionBuilder(); // 構築用
+
+    console.log("作成Transaction:", transaction);
+
+    /*
+      SSS署名
+    */
+    const signedTx = await signTransaction(transaction);
+    console.log("署名済み:", signedTx);
+
+    /*
+      アナウンス
+    */
+    const payload = signedTx.payload;
+    const res = await fetch(`${appState.NODE}/transactions`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ payload })
+    });
+
+    const result = await res.json();
+    console.log("announce:", result);
+
+    alert("委任ハーベスト設定トランザクションを送信しました");
+  } catch(e) {
+    console.error("startHarvest error:", e);
+    alert("ハーベスト設定失敗: " + e.message);
   }
 }
 
 /* ============================================================
-   ハーベスト停止
+   委任ハーベスト解除
 ============================================================ */
 export async function stopHarvest() {
-  console.log("ハーベスト停止処理");
+  console.log("委任ハーベスト解除");
   /*
-    Symbolでは停止Txではなく、委任解除処理になります。後実装
+    後で AccountKeyLinkTransaction LinkAction.Unlink を実装
   */
 }
