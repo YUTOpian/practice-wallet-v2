@@ -115,6 +115,41 @@ document.getElementById("back-account")?.addEventListener("click", () => showPag
 document.getElementById("back-send")?.addEventListener("click", () => showPage(sendPage));
 document.getElementById("back-account-receive")?.addEventListener("click", () => showPage(accountPage));
 document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
+
+// ============================
+// タブ切替
+// ============================
+
+const tabToken = document.getElementById("tab-token");
+const tabActivity = document.getElementById("tab-activity");
+
+const tokenContent = document.getElementById("token-content");
+const activityContent = document.getElementById("activity-content");
+
+
+tabToken?.addEventListener("click", () => {
+
+  tabToken.classList.add("active");
+  tabActivity.classList.remove("active");
+
+  tokenContent.style.display = "block";
+  activityContent.style.display = "none";
+
+});
+
+
+tabActivity?.addEventListener("click", () => {
+
+  tabActivity.classList.add("active");
+  tabToken.classList.remove("active");
+
+  tokenContent.style.display = "none";
+  activityContent.style.display = "block";
+
+});
+
+
+  
   
   // ============================
   // アドレスコピー
