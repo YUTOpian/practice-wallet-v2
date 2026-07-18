@@ -1,7 +1,7 @@
 // harvest.js
 
 import { appState } from "./config.js";
-import { appState } from "./config.js";
+import { hexToUint8Array } from "./utils.js";
 
 /* ============================================================
    ハーベスト状態確認
@@ -57,6 +57,10 @@ export async function startHarvest() {
       throw new Error("公開鍵取得失敗");
     }
 
+     // 公開鍵を32byte配列へ変換
+const publicKeyBytes =
+  hexToUint8Array(appState.currentPubKey);
+
     // ハーベスト委任先公開鍵（現在は自分自身の公開鍵を設定）
     const linkedPublicKey =
   new appState.sdkSymbol.models.PublicKey(
@@ -74,7 +78,10 @@ export async function startHarvest() {
     /*
       署名者 = 自分の公開鍵
     */
-    const signerPublicKey = new appState.sdkSymbol.models.PublicKey(appState.currentPubKey);
+    const signerPublicKey =
+  new appState.sdkSymbol.models.PublicKey(
+    hexToUint8Array(appState.currentPubKey)
+  );
 
     const tx = appState.facade.createTransactionFromTypedDescriptor(
       descriptor,
