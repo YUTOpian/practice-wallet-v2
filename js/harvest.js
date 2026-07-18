@@ -1,47 +1,3 @@
-// harvest.js
-
-import { appState } from "./config.js";
-import { hexToUint8Array } from "./utils.js";
-
-/* ============================================================
-   ハーベスト状態確認
-============================================================ */
-export async function checkHarvestStatus() {
-  const statusEl = document.getElementById("harvest-status");
-  const importanceEl = document.getElementById("harvest-importance");
-  if (!statusEl) return;
-
-  try {
-    statusEl.textContent = "状態確認中...";
-
-    const address = appState.currentAddress.toString();
-    const res = await fetch(`${appState.NODE}/accounts/${address}`);
-    const json = await res.json();
-    const account = json.account;
-
-    if (!account) {
-      statusEl.textContent = "アカウント情報取得失敗";
-      return;
-    }
-
-    const importance = account.importance;
-    console.log("importance:", importance);
-
-    if (importanceEl) {
-      importanceEl.textContent = importance ? BigInt(importance).toString() : "0";
-    }
-
-    if (importance && Number(importance) > 0) {
-      statusEl.textContent = "✅ ハーベスト可能状態";
-    } else {
-      statusEl.textContent = "❌ ハーベスト未設定";
-    }
-  } catch (e) {
-    console.error("Harvest status error:", e);
-    statusEl.textContent = "状態取得エラー";
-  }
-}
-
 /* ============================================================
    委任ハーベスト開始
 ============================================================ */
@@ -58,15 +14,20 @@ export async function startHarvest() {
     }
 
     /*
-      公開鍵HEX
+      公開鍵 HEX → Uint8Array(32byte)
     */
     const publicKeyHex = appState.currentPubKey;
-    console.log("currentPubKey:", publicKeyHex);
+    const publicKeyBytes = hexToUint8Array(publicKeyHex);
+    console.log("publicKeyBytes:", publicKeyBytes, publicKeyBytes.length);
+
+    if (publicKeyBytes.length !== 32) {
+      throw new Error("公開鍵サイズ異常: " + publicKeyBytes.length);
+    }
 
     /*
-      PublicKeyオブジェクト生成
+      AccountKeyLink用 PublicKey
     */
-    const linkedPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyHex);
+    const linkedPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyBytes);
     console.log("linkedPublicKey:", linkedPublicKey);
 
     /*
@@ -80,9 +41,9 @@ export async function startHarvest() {
     console.log("descriptor:", descriptor);
 
     /*
-      署名者公開鍵
+      署名者PublicKey
     */
-    const signerPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyHex);
+    const signerPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyBytes);
 
     /*
       Transaction生成
