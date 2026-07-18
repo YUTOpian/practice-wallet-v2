@@ -73,11 +73,13 @@ export async function startHarvest() {
 
     const tx = appState.facade.createTransactionFromTypedDescriptor(
       descriptor,
-      appState.currentPubKey,
+      linkedPublicKey,
       100,
       60 * 60
     );
-
+     
+console.log(appState.currentPubKey)
+     
     const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
     console.log("Harvest payload:", payload);
 
