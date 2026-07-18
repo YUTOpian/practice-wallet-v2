@@ -57,23 +57,17 @@ export async function startHarvest() {
       throw new Error("公開鍵取得失敗");
     }
 
-     // 公開鍵を32byte配列へ変換
+// 公開鍵を32byte配列へ変換
 const publicKeyBytes =
   hexToUint8Array(appState.currentPubKey);
 
-    // ハーベスト委任先公開鍵（現在は自分自身の公開鍵を設定）
-    const linkedPublicKey =
-  new appState.sdkSymbol.models.PublicKey(
-    hexToUint8Array(appState.currentPubKey)
-  );
 
-    /*
-      AccountKeyLinkTransaction
-    */
-    const descriptor = new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
-      linkedPublicKey,
-      appState.sdkSymbol.models.LinkAction.Link
-    );
+// AccountKeyLink descriptor
+const descriptor =
+  new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
+    publicKeyBytes,
+    appState.sdkSymbol.models.LinkAction.Link
+  );
 
     /*
       署名者 = 自分の公開鍵
@@ -85,7 +79,7 @@ const publicKeyBytes =
 
     const tx = appState.facade.createTransactionFromTypedDescriptor(
       descriptor,
-      signerPublicKey,
+      appState.currentAddress,
       100,
       60 * 60
     );
