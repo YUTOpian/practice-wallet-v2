@@ -58,44 +58,43 @@ export async function startHarvest() {
     }
 
     /*
-      公開鍵HEX → Uint8Array
+      HEX公開鍵 → Uint8Array
     */
     const publicKeyBytes = hexToUint8Array(appState.currentPubKey);
     console.log("publicKey length:", publicKeyBytes.length);
 
+    if (publicKeyBytes.length !== 32) {
+      throw new Error("公開鍵サイズ異常: " + publicKeyBytes.length);
+    }
+
     /*
-      AccountKeyLinkTransaction
+      AccountKeyLink
     */
+    const linkedPublicKey = new appState.sdkSymbol.models.PublicKey(publicKeyBytes);
     const descriptor = new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
-      new appState.sdkSymbol.models.PublicKey(publicKeyBytes),
+      linkedPublicKey,
       appState.sdkSymbol.models.LinkAction.Link
     );
-    console.log("descriptor:", descriptor);
+    console.log("descriptor:", descriptor.toMap());
 
-   
     /*
-      Transaction生成
+      ★ここが変更点
+      PublicKeyではなくUint8Arrayを渡す
     */
     const tx = appState.facade.createTransactionFromTypedDescriptor(
       descriptor,
-      signerPublicKey,
+      publicKeyBytes,
       100,
       60 * 60
     );
     console.log("transaction:", tx);
 
     const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
-    console.log("Harvest payload:", payload);
+    console.log("payload:", payload);
 
-    /*
-      SSS署名
-    */
     window.SSS.setTransactionByPayload(payload);
     const signed = await window.SSS.requestSign();
 
-    /*
-      アナウンス
-    */
     const res = await fetch(`${appState.NODE}/transactions`, {
       method: "PUT",
       headers: {
@@ -107,8 +106,7 @@ export async function startHarvest() {
     if (res.ok) {
       alert("ハーベスト設定トランザクションを送信しました");
     } else {
-      const text = await res.text();
-      console.error(text);
+      console.error(await res.text());
       throw new Error("アナウンス失敗");
     }
   } catch (e) {
