@@ -58,19 +58,18 @@ export async function startHarvest() {
     }
 
     /*
-      公開鍵を32byteへ変換
+      公開鍵HEX -> Uint8Array(32byte)
     */
     const publicKeyBytes = hexToUint8Array(appState.currentPubKey);
     console.log("publicKey bytes:", publicKeyBytes.length);
 
     /*
-      AccountKeyLink Transaction descriptor
-      ※型定義のプレーンオブジェクトとして指定
+      AccountKeyLinkTransaction Descriptor (SDK v3形式)
     */
-    const descriptor = {
+    const descriptor = new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor({
       linkedPublicKey: publicKeyBytes,
       linkAction: appState.sdkSymbol.models.LinkAction.Link
-    };
+    });
 
     /*
       署名者公開鍵
@@ -104,9 +103,7 @@ export async function startHarvest() {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        payload: signed.payload
-      })
+      body: JSON.stringify({ payload: signed.payload })
     });
 
     if (res.ok) {
