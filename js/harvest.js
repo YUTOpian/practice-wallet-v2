@@ -1,6 +1,7 @@
 // harvest.js
 
 import { appState } from "./config.js";
+import { appState } from "./config.js";
 
 /* ============================================================
    ハーベスト状態確認
@@ -57,7 +58,10 @@ export async function startHarvest() {
     }
 
     // ハーベスト委任先公開鍵（現在は自分自身の公開鍵を設定）
-    const linkedPublicKey = new appState.sdkSymbol.models.PublicKey(appState.currentPubKey);
+    const linkedPublicKey =
+  new appState.sdkSymbol.models.PublicKey(
+    hexToUint8Array(appState.currentPubKey)
+  );
 
     /*
       AccountKeyLinkTransaction
