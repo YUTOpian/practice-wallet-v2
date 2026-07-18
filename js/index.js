@@ -108,48 +108,35 @@ window.addEventListener("load", async () => {
   // ============================
   document.getElementById("start-harvest-btn")?.addEventListener("click", startHarvest);
 
-// ============================
-// 戻る
-// ============================
-document.getElementById("back-account")?.addEventListener("click", () => showPage(accountPage));
-document.getElementById("back-send")?.addEventListener("click", () => showPage(sendPage));
-document.getElementById("back-account-receive")?.addEventListener("click", () => showPage(accountPage));
-document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
+  // ============================
+  // 戻る
+  // ============================
+  document.getElementById("back-account")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-send")?.addEventListener("click", () => showPage(sendPage));
+  document.getElementById("back-account-receive")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
 
-// ============================
-// タブ切替
-// ============================
+  // ============================
+  // タブ切替
+  // ============================
+  const tabToken = document.getElementById("tab-token");
+  const tabActivity = document.getElementById("tab-activity");
+  const tokenContent = document.getElementById("token-content");
+  const activityContent = document.getElementById("activity-content");
 
-const tabToken = document.getElementById("tab-token");
-const tabActivity = document.getElementById("tab-activity");
+  tabToken?.addEventListener("click", () => {
+    tabToken.classList.add("active");
+    tabActivity.classList.remove("active");
+    tokenContent.style.display = "block";
+    activityContent.style.display = "none";
+  });
 
-const tokenContent = document.getElementById("token-content");
-const activityContent = document.getElementById("activity-content");
-
-
-tabToken?.addEventListener("click", () => {
-
-  tabToken.classList.add("active");
-  tabActivity.classList.remove("active");
-
-  tokenContent.style.display = "block";
-  activityContent.style.display = "none";
-
-});
-
-
-tabActivity?.addEventListener("click", () => {
-
-  tabActivity.classList.add("active");
-  tabToken.classList.remove("active");
-
-  tokenContent.style.display = "none";
-  activityContent.style.display = "block";
-
-});
-
-
-  
+  tabActivity?.addEventListener("click", () => {
+    tabActivity.classList.add("active");
+    tabToken.classList.remove("active");
+    tokenContent.style.display = "none";
+    activityContent.style.display = "block";
+  });
   
   // ============================
   // アドレスコピー
