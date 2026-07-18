@@ -56,13 +56,8 @@ export async function startHarvest() {
       throw new Error("公開鍵取得失敗");
     }
 
-    console.log("Signer PublicKey:", appState.currentPubKey);
-
-    /*
-      HEX PublicKey -> Uint8Array
-    */
-    const linkedPublicKey = appState.sdkCore.utils.hexToUint8(appState.currentPubKey);
-    console.log("Linked PublicKey:", linkedPublicKey);
+    // ハーベスト委任先公開鍵（現在は自分自身の公開鍵を設定）
+    const linkedPublicKey = new appState.sdkSymbol.models.PublicKey(appState.currentPubKey);
 
     /*
       AccountKeyLinkTransaction
@@ -72,11 +67,16 @@ export async function startHarvest() {
       appState.sdkSymbol.models.LinkAction.Link
     );
 
+    /*
+      署名者 = 自分の公開鍵
+    */
+    const signerPublicKey = new appState.sdkSymbol.models.PublicKey(appState.currentPubKey);
+
     const tx = appState.facade.createTransactionFromTypedDescriptor(
       descriptor,
-      linkedPublicKey, // 署名者
-      100,             // 手数料倍率
-      60 * 60          // deadline
+      signerPublicKey,
+      100,
+      60 * 60
     );
 
     const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
