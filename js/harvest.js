@@ -41,7 +41,6 @@ export async function checkHarvestStatus() {
   }
 }
 
-
 /* ============================================================
    委任ハーベスト開始
 ============================================================ */
@@ -56,30 +55,30 @@ export async function startHarvest() {
     if (!appState.currentPubKey) {
       throw new Error("公開鍵取得失敗");
     }
-     const linkedPublicKey =
-  new appState.sdkSymbol.models.PublicKey(
-    appState.currentPubKey
-  );
+
+    console.log("Signer PublicKey:", appState.currentPubKey);
+
+    /*
+      HEX PublicKey -> Uint8Array
+    */
+    const linkedPublicKey = appState.sdkCore.utils.hexToUint8(appState.currentPubKey);
+    console.log("Linked PublicKey:", linkedPublicKey);
+
     /*
       AccountKeyLinkTransaction
     */
-    const descriptor =
-  new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
-    {
-      linkedPublicKey: linkedPublicKey,
-      linkAction: appState.sdkSymbol.models.LinkAction.Link
-    }
-  );
+    const descriptor = new appState.sdkSymbol.descriptors.AccountKeyLinkTransactionV1Descriptor(
+      linkedPublicKey,
+      appState.sdkSymbol.models.LinkAction.Link
+    );
 
     const tx = appState.facade.createTransactionFromTypedDescriptor(
       descriptor,
-      linkedPublicKey,
-      100,
-      60 * 60
+      linkedPublicKey, // 署名者
+      100,             // 手数料倍率
+      60 * 60          // deadline
     );
-     
-console.log(appState.currentPubKey)
-     
+
     const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
     console.log("Harvest payload:", payload);
 
