@@ -1,4 +1,5 @@
 // harvest.js
+
 import { appState } from "./config.js";
 
 /* ============================================================
@@ -13,38 +14,61 @@ export async function checkHarvestStatus() {
   }
 
   try {
-    console.log("ハーベスト状態確認開始");
     const address = appState.currentAddress.toString();
-    console.log("確認アドレス:", address);
-
+    console.log("ハーベスト確認:", address);
     statusEl.textContent = "状態確認中...";
 
-    const url = `${appState.NODE}/accounts/${address}`;
-    console.log("REST URL:", url);
+    /*
+      アカウント情報取得
+    */
+    const accountRes = await fetch(`${appState.NODE}/accounts/${address}`);
+    const accountJson = await accountRes.json();
+    const account = accountJson.account;
 
-    const res = await fetch(url);
-    console.log("レスポンス:", res.status);
-
-    const json = await res.json();
-    console.log("JSON:", json);
-
-    const account = json.account;
     if (!account) {
-      statusEl.textContent = "アカウント情報取得失敗";
+      statusEl.textContent = "アカウント取得失敗";
       return;
     }
 
-    const importance = account.importance;
-    console.log("importance:", importance);
+    /*
+      Importance確認
+    */
+    const importance = BigInt(account.importance ?? 0);
+    console.log("importance:", importance.toString());
 
-    if (importance && Number(importance) > 0) {
-      statusEl.textContent = "✅ ハーベスト可能状態";
+    /*
+      公開鍵リンク確認
+    */
+    const publicKey = account.publicKey;
+    const hasPublicKey = publicKey && publicKey !== "0000000000000000000000000000000000000000000000000000000000000000";
+    console.log("PublicKey:", hasPublicKey);
+
+    /*
+      ハーベスト資格判定
+    */
+    if (importance > 0n && hasPublicKey) {
+      statusEl.textContent = "✅ ハーベスト設定可能";
     } else {
-      statusEl.textContent = "❌ ハーベスト未設定";
+      statusEl.textContent = "❌ ハーベスト条件未達";
     }
-
-  } catch (e) {
-    console.error("Harvest status error:", e);
+  } catch(e) {
+    console.error("Harvest error:", e);
     statusEl.textContent = "状態取得エラー";
   }
+}
+
+/* ============================================================
+   ハーベスト開始
+============================================================ */
+export async function startHarvest() {
+  console.log("ハーベスト開始処理");
+
+  /*
+    ここで
+    ① PersistentHarvestingDelegationMessage作成
+    ② Aggregate Bonded Transaction作成
+    ③ SSS署名
+    ④ announce
+    を実装する
+  */
 }
