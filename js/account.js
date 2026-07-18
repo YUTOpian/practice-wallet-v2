@@ -2,7 +2,7 @@
 // Account情報取得・Mosaic残高取得
 
 import { appState } from "./config.js";
-import { setText } from "./ui.js";
+import { setText, setStatus } from "./ui.js";
 import { formatMosaicAmount } from "./utils.js";
 
 function toHexMosaicId(id) {
