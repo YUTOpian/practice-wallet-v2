@@ -9,6 +9,7 @@ import { initSdk } from "./sdk.js";
 import { setStatus, setText } from "./ui.js";
 import { refreshAccount } from "./account.js";
 import { loadRecentTx } from "./transactions.js";
+import { getSSSStatusHtml } from "./utils.js";
 
 /* ------------------------------------------------------
    ネットワーク名表示
@@ -35,6 +36,8 @@ async function internalConnect(isAuto) {
       if (!isAuto) {
         setStatus("sss-status", "SSS Extension が見つかりません。", "error");
       }
+      const infoEl = document.getElementById("node-info");
+      if (infoEl) infoEl.innerHTML = getSSSStatusHtml();
       return;
     }
 
@@ -48,6 +51,8 @@ async function internalConnect(isAuto) {
       if (!isAuto) {
         setStatus("sss-status", "SSSでアカウントを選択してください。", "error");
       }
+      const infoEl = document.getElementById("node-info");
+      if (infoEl) infoEl.innerHTML = getSSSStatusHtml();
       return;
     }
 
