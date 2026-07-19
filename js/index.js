@@ -22,6 +22,7 @@ import {
   unlockVault,
   saveVault,
   clearVault,
+  logout,
 } from "./auth.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
@@ -325,6 +326,12 @@ window.addEventListener("load", async () => {
   });
 
   document.getElementById("apply-fee-btn")?.addEventListener("click", applyFeeSettings);
+
+  document.getElementById("logout-btn")?.addEventListener("click", () => {
+    if (!confirm("ログアウトします。次回は再度ニーモニックの入力（またはSSS Extension接続）が必要になります。よろしいですか？")) return;
+    logout();
+    showPage(welcomePage);
+  });
 
   // ============================
   // 戻る
