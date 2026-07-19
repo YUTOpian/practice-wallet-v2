@@ -196,6 +196,78 @@ body {
 }
 
 /* ============================================================
+   Txカード内 各要素の色分け（視認性向上）
+============================================================ */
+
+/* 送信/受信ラベル */
+.tx-title.tx-label-send {
+  color: #f87171; /* 赤 */
+}
+.tx-title.tx-label-receive {
+  color: #4ade80; /* 緑 */
+}
+
+/* 送金元・送金先 */
+.tx-address {
+  font-size: 13px;
+  margin-top: 6px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.tx-address-label {
+  display: inline-block;
+  color: #94a3b8; /* グレー */
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+.tx-address-value {
+  color: #e5e7eb; /* 薄い白 */
+}
+
+/* モザイク(トークン)表示 */
+.tx-mosaic {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin-top: 8px;
+}
+
+.tx-mosaic-name {
+  color: #93c5fd; /* 水色 */
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.tx-mosaic-amount {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* メッセージ */
+.tx-message {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.tx-message-label {
+  display: inline-block;
+  color: #94a3b8; /* グレー */
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+.tx-message-value {
+  color: #fbbf24; /* 黄色系（メッセージを目立たせる） */
+}
+
+/* ============================================================
    UNCONFIRMED（未承認）／ カード強制ハイライト
 ============================================================ */
 .tx-item.unconfirmed {
@@ -213,6 +285,18 @@ body {
 }
 .tx-item.unconfirmed .tx-time {
   color: #7a6300 !important;
+}
+.tx-item.unconfirmed .tx-address-value,
+.tx-item.unconfirmed .tx-mosaic-name,
+.tx-item.unconfirmed .tx-message-value {
+  color: #6b5e00 !important;
+}
+.tx-item.unconfirmed .tx-address-label,
+.tx-item.unconfirmed .tx-message-label {
+  color: #7a6300 !important;
+}
+.tx-item.unconfirmed .tx-mosaic {
+  background: rgba(0,0,0,0.06);
 }
 
 /* 点滅アニメーション */
