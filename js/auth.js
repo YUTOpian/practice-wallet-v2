@@ -7,7 +7,7 @@ import { selectNode } from "./nodeSelector.js";
 import { initSdk } from "./sdk.js";
 import { refreshAccount } from "./account.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
-import { initWebSocket } from "./ws.js";
+import { initWebSocket, closeWebSocket } from "./ws.js";
 import { setText } from "./ui.js";
 
 const VAULT_KEY = "walletVault";
@@ -222,4 +222,23 @@ export function encryptMessageLocally(recipientPubKeyHex, plainText) {
   const encoder = new appState.sdkSymbol.MessageEncoder(appState.localKeyPair);
   const recipientPub = new appState.sdkCore.PublicKey(recipientPubKeyHex);
   return encoder.encode(recipientPub, new TextEncoder().encode(plainText));
+}
+
+/* ============================================================
+   ログアウト
+   保存済みアカウント(パスワード付きボールト)も削除するため、
+   次回は自動ログインできず、必ずニーモニックの再入力が必要になる
+============================================================ */
+export function logout() {
+  clearVault();
+  closeWebSocket();
+
+  appState.authMode = null;
+  appState.currentPubKey = null;
+  appState.currentAddress = null;
+  appState.localPrivateKeyHex = null;
+  appState.localKeyPair = null;
+  appState.NODE = null;
+  appState.isSdkReady = false;
+  appState.networkType = null;
 }
