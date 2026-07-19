@@ -721,3 +721,35 @@ body {
 .wallet-panel.active {
   display: block;
 }
+
+/* ============================================================
+   ハーベスト状態バッジ
+============================================================ */
+.harvest-badge {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: bold;
+  font-size: 15px;
+  margin: 10px 0;
+  background: #334155;
+  color: #e5e7eb;
+}
+
+.harvest-badge.active {
+  background: #064e3b;
+  color: #4ade80;
+  border: 1px solid #16a34a;
+}
+
+.harvest-badge.partial {
+  background: #78350f;
+  color: #fbbf24;
+  border: 1px solid #d97706;
+}
+
+.harvest-badge.inactive {
+  background: #3f1d1d;
+  color: #f87171;
+  border: 1px solid #dc2626;
+}
