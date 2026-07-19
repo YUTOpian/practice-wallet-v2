@@ -137,6 +137,18 @@
 
       <hr>
 
+      <h3>委任先ノード</h3>
+      <p style="font-size:13px;color:#94a3b8;">
+        委任ハーベスティングを受け付けているノードを選ぶか、URLを直接入力してください。
+        （下の候補一覧は単にオンラインなノード一覧で、委任ハーベストを受け付けているとは限りません）
+      </p>
+      <select id="harvest-node-select" class="input-box">
+        <option value="">-- 候補を読み込み中... --</option>
+      </select>
+      <input id="harvest-node-input" class="input-box" placeholder="または直接ノードURLを入力 (例: https://xxx.xxx.jp:3001)">
+
+      <hr>
+
       <h3>設定</h3>
       <button id="start-harvest-btn" class="button-primary">開始</button>
       <button id="stop-harvest-btn" class="button-primary">停止</button>
@@ -150,5 +162,3 @@
 
 </body>
 </html>
-
-  
