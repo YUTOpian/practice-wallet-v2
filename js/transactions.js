@@ -1,9 +1,14 @@
 // transactions.js
 
-import { appState, NetworkType } from "./config.js";
+import { appState, NetworkType, getXymMosaicIdHex } from "./config.js";
 import { addCallback, getBlockTimestamp } from "./ws.js";
+import { hexToBytes } from "./utils.js";
 
 const txMap = {};
+
+// トランザクションに登場したモザイクのネームスペース名キャッシュ
+// (保有していないモザイクでも名前を表示できるようにするため)
+const mosaicNameCache = {};
 
 /* ============================================================
    Symbol timestamp → 人間時間
@@ -48,15 +53,91 @@ function decodeMessage(payload) {
 
 /* ============================================================
    Address
+   REST APIから来るアドレスは16進エンコード(48文字)の場合と
+   既にbase32(39文字)の場合があるため、両方に対応してbase32に統一する
 ============================================================ */
 function formatAddress(address) {
   if (!address) return "---";
-  try {
-    if (typeof address === "string") return address;
-    return address.plain();
-  } catch {
-    return String(address);
+
+  if (typeof address !== "string") {
+    try {
+      return address.plain ? address.plain() : String(address);
+    } catch {
+      return String(address);
+    }
   }
+
+  // 既にbase32アドレス(39文字)ならそのまま
+  if (address.length === 39) return address;
+
+  // 16進エンコードされたアドレス(48文字)ならデコードしてbase32に変換
+  if (address.length === 48 && /^[0-9A-Fa-f]+$/.test(address) && appState.sdkCore) {
+    try {
+      const bytes = hexToBytes(address);
+      return new appState.sdkCore.Address(bytes).toString();
+    } catch (e) {
+      console.warn("address decode failed", e);
+      return address;
+    }
+  }
+
+  return address;
+}
+
+/**
+ * 送信者の公開鍵からアドレス(base32)を導出する
+ * (受信トランザクションの送金元表示で使用)
+ */
+function publicKeyToAddress(pubKeyHex) {
+  if (!pubKeyHex) return "---";
+  try {
+    const pub = new appState.sdkCore.PublicKey(pubKeyHex);
+    return appState.facade.createPublicAccount(pub).address.toString();
+  } catch (e) {
+    console.warn("publicKey→address変換失敗", e);
+    return pubKeyHex;
+  }
+}
+
+/* ============================================================
+   モザイク名(ネームスペース)解決
+   保有していないモザイクでも名前を表示できるように、
+   トランザクションに登場したモザイクIDをまとめてノードに問い合わせる
+============================================================ */
+async function resolveMosaicNames(mosaicIds) {
+  const xymId = getXymMosaicIdHex();
+
+  const unknown = [...new Set(mosaicIds)].filter(id =>
+    id &&
+    id !== xymId &&
+    !appState.mosaicInfo?.[id] &&
+    !mosaicNameCache[id]
+  );
+
+  if (unknown.length === 0 || !appState.NODE) return;
+
+  try {
+    const res = await fetch(`${appState.NODE}/namespaces/mosaic/names`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mosaicIds: unknown })
+    });
+    const json = await res.json();
+
+    for (const item of json.mosaicNames || []) {
+      const mosaicId = item.mosaicId.toUpperCase();
+      if (item.names && item.names.length > 0) {
+        mosaicNameCache[mosaicId] = item.names[0];
+      }
+    }
+  } catch (e) {
+    console.warn("モザイク名の解決に失敗しました", e);
+  }
+}
+
+function getMosaicName(id) {
+  if (id === getXymMosaicIdHex()) return "XYM";
+  return appState.mosaicInfo?.[id]?.name ?? mosaicNameCache[id] ?? id;
 }
 
 /* ============================================================
@@ -73,7 +154,7 @@ function extractAmount(tx) {
     const id = mosaic.id;
     const info = appState.mosaicInfo?.[id];
     const divisibility = info?.divisibility ?? 0;
-    const name = info?.name ?? id;
+    const name = getMosaicName(id);
 
     return {
       id,
@@ -100,14 +181,18 @@ function getExplorerUrl(hash) {
 export function createTxCard(txInfo) {
   const { hash, msg, state, timestamp, mosaics, direction, sender, recipient } = txInfo;
   const explorer = getExplorerUrl(hash);
-  const label = direction === "receive" ? "受信" : "送信";
+  const isSend = direction === "send";
+  const label = isSend ? "送信" : "受信";
+  const labelClass = isSend ? "tx-label-send" : "tx-label-receive";
+  const amountClass = isSend ? "tx-amount-send" : "tx-amount-receive";
+  const sign = isSend ? "-" : "+";
 
   let mosaicHtml = "";
   if (mosaics && mosaics.length) {
     mosaicHtml = mosaics.map(mosaic => `
       <div class="tx-mosaic">
-        <div>トークン: ${mosaic.name}</div>
-        <div>数量: ${mosaic.amount}</div>
+        <span class="tx-mosaic-name">${mosaic.name}</span>
+        <span class="tx-mosaic-amount ${amountClass}">${sign}${mosaic.amount}</span>
       </div>
     `).join("");
   }
@@ -115,12 +200,12 @@ export function createTxCard(txInfo) {
   return `
     <div class="tx-item ${state === "unconfirmed" ? "unconfirmed" : "confirmed"}" id="tx-${hash}" onclick="window.open('${explorer}','_blank')">
       <div class="tx-body">
-        <div class="tx-title">${label}</div>
+        <div class="tx-title ${labelClass}">${label}</div>
         <div class="tx-status">${state.toUpperCase()}</div>
-        <div class="tx-address">送金元:<br>${sender ?? "---"}</div>
-        <div class="tx-address">送金先:<br>${recipient ?? "---"}</div>
+        <div class="tx-address"><span class="tx-address-label">送金元</span><span class="tx-address-value">${sender ?? "---"}</span></div>
+        <div class="tx-address"><span class="tx-address-label">送金先</span><span class="tx-address-value">${recipient ?? "---"}</span></div>
         ${mosaicHtml}
-        <div class="tx-message">メッセージ:<br>${msg}</div>
+        <div class="tx-message"><span class="tx-message-label">メッセージ</span><span class="tx-message-value">${msg}</span></div>
         ${state === "confirmed" && timestamp ? `<div class="tx-time">🕒 ${formatTimestamp(timestamp)}</div>` : ""}
       </div>
     </div>
@@ -155,6 +240,10 @@ export async function loadRecentTx() {
     const res = await fetch(url);
     const json = await res.json();
 
+    // 事前に全モザイクのネームスペース名をまとめて解決しておく
+    const allMosaicIds = json.data.flatMap(item => (item.transaction.mosaics || []).map(m => m.id));
+    await resolveMosaicNames(allMosaicIds);
+
     el.innerHTML = json.data.map(item => {
       const tx = item.transaction;
       const meta = item.meta;
@@ -162,7 +251,7 @@ export async function loadRecentTx() {
 
       const txInfo = {
         hash: meta.hash,
-        sender: amountInfo?.direction === "send" ? address : formatAddress(tx.signerPublicKey),
+        sender: amountInfo?.direction === "send" ? address : publicKeyToAddress(tx.signerPublicKey),
         recipient: formatAddress(tx.recipientAddress),
         msg: decodeMessage(tx.message),
         state: "confirmed",
@@ -185,15 +274,17 @@ export async function loadRecentTx() {
 ============================================================ */
 export function initLiveTx(address) {
   /* 未承認 */
-  addCallback(`unconfirmedAdded/${address}`, payload => {
+  addCallback(`unconfirmedAdded/${address}`, async payload => {
     const tx = payload.data;
     const hash = tx.meta.hash;
     if (txMap[hash]) return;
 
+    await resolveMosaicNames((tx.transaction.mosaics || []).map(m => m.id));
+
     const amountInfo = extractAmount(tx.transaction);
     const txInfo = {
       hash,
-      sender: appState.currentAddress.toString(),
+      sender: amountInfo?.direction === "send" ? address : publicKeyToAddress(tx.transaction.signerPublicKey),
       recipient: formatAddress(tx.transaction.recipientAddress),
       msg: decodeMessage(tx.transaction.message),
       state: "unconfirmed",
@@ -211,11 +302,13 @@ export function initLiveTx(address) {
     const tx = payload.data;
     const hash = tx.meta.hash;
 
+    await resolveMosaicNames((tx.transaction.mosaics || []).map(m => m.id));
+
     const blockTs = await getBlockTimestamp(tx.meta.height);
     const amountInfo = extractAmount(tx.transaction);
     const txInfo = {
       hash,
-      sender: appState.currentAddress.toString(),
+      sender: amountInfo?.direction === "send" ? address : publicKeyToAddress(tx.transaction.signerPublicKey),
       recipient: formatAddress(tx.transaction.recipientAddress),
       msg: decodeMessage(tx.transaction.message),
       state: "confirmed",
