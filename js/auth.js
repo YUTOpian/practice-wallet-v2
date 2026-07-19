@@ -22,7 +22,7 @@ const DERIVATION_PATH = "m/44'/4343'/0'/0'/0'";
 ============================================================ */
 async function deriveFromMnemonic(mnemonicPhrase, networkType) {
   const { MnemonicPassPhrase, ExtendedKey, Wallet, Network } = await import(
-    "https://esm.sh/symbol-hd-wallets@0.14.3"
+    "https://esm.sh/symbol-hd-wallets@0.14.2"
   );
 
   const mnemonic = new MnemonicPassPhrase(mnemonicPhrase.trim().toLowerCase());
