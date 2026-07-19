@@ -92,6 +92,11 @@ export async function sendTx() {
       }
 
       message = new Uint8Array([0x01, ...hexToBytes(encrypted.payload)]);
+
+      // SSS Extensionのポップアップを閉じた直後に次のポップアップを
+      // 開こうとすると、表示が間に合わず一瞬で消えてしまうことがあるため、
+      // 少し間隔を空けてから次の署名(送金Tx)をリクエストする
+      await new Promise((r) => setTimeout(r, 600));
     } catch (e) {
       console.error("encrypt message error:", e);
       setStatus(
