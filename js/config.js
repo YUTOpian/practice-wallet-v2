@@ -74,6 +74,17 @@ export const appState = {
     }
   })(),
 
+  // ========================================================
+  // 認証方式
+  // ========================================================
+  // "sss" | "local"
+  authMode: null,
+
+  // ローカル(ニーモニック)ログイン時のみ使用。メモリ上にのみ保持し、
+  // 平文のままlocalStorageに保存することはない。
+  localPrivateKeyHex: null,
+  localKeyPair: null,
+
   // Symbol SDK v3
   facade: null,
   sdkCore: null,
