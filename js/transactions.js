@@ -2,7 +2,6 @@
 
 import { appState, NetworkType, getXymMosaicIdHex } from "./config.js";
 import { addCallback, getBlockTimestamp } from "./ws.js";
-import { hexToBytes } from "./utils.js";
 
 const txMap = {};
 
@@ -71,10 +70,9 @@ function formatAddress(address) {
   if (address.length === 39) return address;
 
   // 16進エンコードされたアドレス(48文字)ならデコードしてbase32に変換
-  if (address.length === 48 && /^[0-9A-Fa-f]+$/.test(address) && appState.sdkSymbol) {
+  if (address.length === 48 && /^[0-9A-Fa-f]+$/.test(address) && appState.sdkCore) {
     try {
-      const bytes = hexToBytes(address);
-      return new appState.sdkSymbol.Address(bytes).toString();
+      return appState.sdkCore.Address.fromDecodedAddressHexString(address).toString();
     } catch (e) {
       console.warn("address decode failed", e);
       return address;
@@ -107,7 +105,7 @@ function publicKeyToAddress(pubKeyHex) {
 async function resolveMosaicNames(mosaicIds) {
   const xymId = getXymMosaicIdHex();
 
-  const unknown = [...new Set(mosaicIds.map(id => id?.toUpperCase()))].filter(id =>
+  const unknown = [...new Set(mosaicIds)].filter(id =>
     id &&
     id !== xymId &&
     !appState.mosaicInfo?.[id] &&
@@ -127,12 +125,7 @@ async function resolveMosaicNames(mosaicIds) {
     for (const item of json.mosaicNames || []) {
       const mosaicId = item.mosaicId.toUpperCase();
       if (item.names && item.names.length > 0) {
-        const first = item.names[0];
-        // names[] の各要素は文字列の場合とオブジェクト({name, parentId, ...})の場合がある
-        const resolvedName = typeof first === "string" ? first : first?.name;
-        if (resolvedName) {
-          mosaicNameCache[mosaicId] = resolvedName;
-        }
+        mosaicNameCache[mosaicId] = item.names[0];
       }
     }
   } catch (e) {
@@ -142,8 +135,7 @@ async function resolveMosaicNames(mosaicIds) {
 
 function getMosaicName(id) {
   if (id === getXymMosaicIdHex()) return "XYM";
-  const upperId = id?.toUpperCase();
-  return appState.mosaicInfo?.[upperId]?.name ?? mosaicNameCache[upperId] ?? id;
+  return appState.mosaicInfo?.[id]?.name ?? mosaicNameCache[id] ?? id;
 }
 
 /* ============================================================
@@ -157,7 +149,7 @@ function extractAmount(tx) {
   const direction = signer === myPub ? "send" : "receive";
 
   const mosaics = tx.mosaics.map(mosaic => {
-    const id = mosaic.id?.toUpperCase();
+    const id = mosaic.id;
     const info = appState.mosaicInfo?.[id];
     const divisibility = info?.divisibility ?? 0;
     const name = getMosaicName(id);
