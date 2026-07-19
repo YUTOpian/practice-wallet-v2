@@ -42,6 +42,10 @@ window.addEventListener("load", async () => {
     page.classList.add("active");
   }
 
+  // 送金画面に「保有トークン一覧」から直接入ったかどうか
+  let cameFromMosaicList = false;
+  const backSendBtn = document.getElementById("back-send");
+
   // ============================
   // 送金画面
   // ============================
@@ -68,6 +72,22 @@ window.addEventListener("load", async () => {
     document.getElementById("selected-mosaic-id").value = 
       item.querySelector(".mosaic-id")?.textContent;
 
+    cameFromMosaicList = false;
+    if (backSendBtn) backSendBtn.textContent = "← トークン選択へ戻る";
+    showPage(transferPage);
+  });
+
+  // ============================
+  // 保有トークン一覧から直接送金画面へ
+  // ============================
+  document.getElementById("mosaic-list")?.addEventListener("click", e => {
+    const item = e.target.closest(".mosaic-item");
+    if (!item) return;
+
+    // 選択情報(selected-mosaic-id / name / balance)は
+    // account.js 側の item.onclick で既にセット済み
+    cameFromMosaicList = true;
+    if (backSendBtn) backSendBtn.textContent = "← 戻る";
     showPage(transferPage);
   });
 
@@ -143,7 +163,9 @@ window.addEventListener("load", async () => {
   // 戻る
   // ============================
   document.getElementById("back-account")?.addEventListener("click", () => showPage(accountPage));
-  document.getElementById("back-send")?.addEventListener("click", () => showPage(sendPage));
+  backSendBtn?.addEventListener("click", () => {
+    showPage(cameFromMosaicList ? accountPage : sendPage);
+  });
   document.getElementById("back-account-receive")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
 
