@@ -72,7 +72,7 @@ function formatAddress(address) {
   // 16進エンコードされたアドレス(48文字)ならデコードしてbase32に変換
   if (address.length === 48 && /^[0-9A-Fa-f]+$/.test(address) && appState.sdkCore) {
     try {
-      return appState.sdkCore.Address.fromDecodedAddressHexString(address).toString();
+      return new appState.sdkSymbol.Address(bytes).toString();
     } catch (e) {
       console.warn("address decode failed", e);
       return address;
