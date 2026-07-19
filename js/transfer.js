@@ -90,7 +90,7 @@ export async function sendTx() {
   const tx = appState.facade.createTransactionFromTypedDescriptor(
     descriptor,
     appState.currentPubKey,
-    100,
+    appState.feeMultiplier ?? 100,
     60 * 60
   );
 
