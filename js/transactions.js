@@ -74,7 +74,7 @@ function formatAddress(address) {
   if (address.length === 48 && /^[0-9A-Fa-f]+$/.test(address) && appState.sdkCore) {
     try {
       const bytes = hexToBytes(address);
-      return new appState.sdkCore.Address(bytes).toString();
+      return new appState.sdkSymbol.Address(bytes).toString();
     } catch (e) {
       console.warn("address decode failed", e);
       return address;
