@@ -8,6 +8,8 @@ import { initWebSocket } from "./ws.js";
 import { showPopup } from "./utils.js";
 import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates } from "./harvest.js";
 import QRCode from "https://esm.sh/qrcode";
+import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
+import { firstValueFrom } from "https://esm.sh/rxjs";
 
 window.addEventListener("load", async () => {
   // ============================
@@ -80,16 +82,43 @@ window.addEventListener("load", async () => {
   document.getElementById("receive-btn")?.addEventListener("click", async () => {
     showPage(receivePage);
     const address = appState.currentAddress.toString();
-    
+
     document.getElementById("receive-address").textContent = address;
     const qr = document.getElementById("receive-qrcode");
-    qr.innerHTML = "";
+    qr.innerHTML = "読み込み中...";
 
-    const dataUrl = await QRCode.toDataURL(address, {
-      width: 220,
-      margin: 1
-    });
-    qr.innerHTML = `<img src="${dataUrl}" alt="QR Code">`;
+    try {
+      if (!appState.generationHash || !appState.networkType) {
+        throw new Error("ネットワーク情報が未取得です");
+      }
+
+      // 他のSymbolウォレット(公式モバイルウォレット等)が読み込める
+      // 形式(symbol-qr-library の AddressQR)でQRコードを生成する
+      const addressQR = QRCodeGenerator.createExportAddress(
+        "Symbol Simple Wallet",
+        address,
+        appState.networkType,
+        appState.generationHash
+      );
+
+      const dataUrl = await firstValueFrom(addressQR.toBase64());
+      qr.innerHTML = `<img src="${dataUrl}" alt="QR Code">`;
+    } catch (e) {
+      console.error("AddressQR生成失敗、通常QRにフォールバック", e);
+      const dataUrl = await QRCode.toDataURL(address, {
+        width: 220,
+        margin: 1
+      });
+      qr.innerHTML = `<img src="${dataUrl}" alt="QR Code">`;
+    }
+  });
+
+  // ============================
+  // 受け取りアドレスコピー
+  // ============================
+  document.getElementById("copy-receive-address")?.addEventListener("click", () => {
+    navigator.clipboard.writeText(appState.currentAddress.toString());
+    showPopup("アドレスをコピーしました");
   });
 
   // ============================
