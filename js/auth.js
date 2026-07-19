@@ -16,14 +16,19 @@ const VAULT_KEY = "walletVault";
 const DERIVATION_PATH = "m/44'/4343'/0'/0'/0'";
 
 /* ============================================================
-   ニーモニック → 秘密鍵 (BIP39 + SLIP-10, symbol-hd-wallets使用)
-   自前実装せず公式ライブラリを使うことで、他のSymbolウォレットと
-   同じアドレスが導出されることを保証する
+   ニーモニック → 秘密鍵 (BIP39 + SLIP-10)
+   @scure/bip39 と micro-ed25519-hdkey はどちらもNode.jsのBufferに
+   依存しない監査済みの純粋なJS実装で、ブラウザでの動作実績が多いため採用。
+   導出パスはSymbol公式ウォレットと同じ m/44'/4343'/0'/0'/0'
 ============================================================ */
-async function deriveFromMnemonic(mnemonicPhrase, networkType) {
-  const { MnemonicPassPhrase, ExtendedKey, Wallet, Network } = await import(
-    "https://esm.sh/symbol-hd-wallets@0.14.2"
-  );
+async function deriveFromMnemonic(mnemonicPhrase) {
+  const [bip39, wordlistModule, hdkeyModule] = await Promise.all([
+    import("https://esm.sh/@scure/bip39@2.2.0"),
+    import("https://esm.sh/@scure/bip39@2.2.0/wordlists/english"),
+    import("https://esm.sh/micro-ed25519-hdkey@0.1.2"),
+  ]);
+  const { wordlist } = wordlistModule;
+  const { HDKey } = hdkeyModule;
 
   // 貼り付け時の改行・連続スペース・全角スペースを単一の半角スペースに正規化
   const normalized = mnemonicPhrase
@@ -34,17 +39,20 @@ async function deriveFromMnemonic(mnemonicPhrase, networkType) {
   const wordCount = normalized.split(" ").filter(Boolean).length;
   console.log("mnemonic word count:", wordCount);
 
-  const mnemonic = new MnemonicPassPhrase(normalized);
-  if (!mnemonic.isValid()) {
+  if (!bip39.validateMnemonic(normalized, wordlist)) {
     throw new Error("ニーモニックの形式が正しくありません（単語数やスペルを確認してください）");
   }
 
-  const seedHex = mnemonic.toSeed().toString("hex");
-  const xkey = ExtendedKey.createFromSeed(seedHex, Network.SYMBOL);
-  const wallet = new Wallet(xkey);
-  const account = wallet.getChildAccount(DERIVATION_PATH, networkType);
+  const seed = bip39.mnemonicToSeedSync(normalized);
+  const hdkey = HDKey.fromMasterSeed(seed);
+  const child = hdkey.derive(DERIVATION_PATH);
 
-  return account.privateKey;
+  const privateKeyHex = Array.from(child.privateKey)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .toUpperCase();
+
+  return privateKeyHex;
 }
 
 /* ============================================================
@@ -120,7 +128,7 @@ export async function connectWithSSS() {
    ニーモニックでログイン
 ============================================================ */
 export async function loginWithMnemonic(mnemonicPhrase, networkType) {
-  const privateKeyHex = await deriveFromMnemonic(mnemonicPhrase, networkType);
+  const privateKeyHex = await deriveFromMnemonic(mnemonicPhrase);
 
   appState.authMode = "local";
   appState.networkType = networkType;
