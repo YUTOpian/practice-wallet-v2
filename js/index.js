@@ -6,7 +6,7 @@ import { sendTx } from "./transfer.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
 import { showPopup } from "./utils.js";
-import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates } from "./harvest.js";
+import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates, loadHarvestHistory } from "./harvest.js";
 import {
   showCurrentNode,
   loadNodeSettingsCandidates,
@@ -162,6 +162,7 @@ window.addEventListener("load", async () => {
 
     await checkHarvestStatus();
     await loadHarvestNodeCandidates();
+    await loadHarvestHistory();
   });
 
   // ============================
