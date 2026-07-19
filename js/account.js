@@ -97,7 +97,12 @@ export async function refreshAccount() {
       for (const item of namespaceInfo.mosaicNames || []) {
         const mosaicId = item.mosaicId.toUpperCase();
         if (item.names && item.names.length > 0) {
-          namespaceMap[mosaicId] = item.names[0];
+          const first = item.names[0];
+          // names[] の各要素は文字列の場合とオブジェクト({name, parentId, ...})の場合がある
+          const resolvedName = typeof first === "string" ? first : first?.name;
+          if (resolvedName) {
+            namespaceMap[mosaicId] = resolvedName;
+          }
         }
       }
     } catch(e) {
@@ -301,4 +306,3 @@ export async function getRecipientPublicKey(address) {
 
   return publicKey;
 }
-
