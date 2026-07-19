@@ -1,166 +1,160 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Symbol Simple Wallet</title>
-  <link rel="stylesheet" href="css/base.css" />
-  <link rel="stylesheet" href="css/wallet.css" />
-</head>
-<body>
+// index.js
 
-<header>
-  <h2>Symbol Simple Wallet</h2>
-  <div class="header-info">
-    <p><span id="node-info">---</span></p>
-  </div>
-</header>
+import { appState } from "./config.js";
+import { autoConnectSSS } from "./sss.js";
+import { sendTx } from "./transfer.js";
+import { loadRecentTx, initLiveTx } from "./transactions.js";
+import { initWebSocket } from "./ws.js";
+import { showPopup } from "./utils.js";
+import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates } from "./harvest.js";
+import QRCode from "https://esm.sh/qrcode";
 
-<div class="container">
+window.addEventListener("load", async () => {
+  // ============================
+  // SSS初期化
+  // ============================
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  await autoConnectSSS();
 
-  <!-- ============================================================
-       アカウント画面
-  ============================================================ -->
-  <div id="account-page" class="page active">
-    <div class="card">
-      <h2>アカウント情報</h2>
+  if (!window.SSS || !window.SSS.activePublicKey) {
+    showPopup("⚠️ SSS Extension とリンクしてください", true);
+    return;
+  }
 
-      <p><b>アドレス：</b></p>
-      <div class="address-row">
-        <span id="account-address" class="address-text">---</span>
-      </div>
-      <button id="copy-address-btn" class="copy-btn">🗒️</button>
+  // ============================
+  // ページ取得
+  // ============================
+  const accountPage = document.getElementById("account-page");
+  const sendPage = document.getElementById("send-page");
+  const transferPage = document.getElementById("transfer-page");
+  const receivePage = document.getElementById("receive-page");
+  const harvestPage = document.getElementById("harvest-page");
 
-      <p>
-        <b>残高：</b>
-        <span id="account-balance">---</span>
-      </p>
+  // ============================
+  // ページ切替
+  // ============================
+  function showPage(page) {
+    document.querySelectorAll(".page").forEach(p => {
+      p.classList.remove("active");
+    });
+    page.classList.add("active");
+  }
 
-      <div class="wallet-actions">
-        <button id="receive-btn" class="button-primary">受け取り</button>
-        <button id="send-btn" class="button-primary">送金</button>
-        <button id="harvest-btn" class="button-primary">ステーキング</button>
-      </div>
+  // ============================
+  // 送金画面
+  // ============================
+  document.getElementById("send-btn")?.addEventListener("click", () => {
+    showPage(sendPage);
+    const sendList = document.getElementById("send-mosaic-list");
+    const mosaicList = document.getElementById("mosaic-list");
 
-      <hr>
+    if (sendList && mosaicList) {
+      sendList.innerHTML = mosaicList.innerHTML;
+    }
+  });
 
-      <!-- タブ -->
-      <div class="wallet-tabs">
-        <div id="tab-token" class="wallet-tab active">保有トークン</div>
-        <div id="tab-activity" class="wallet-tab">アクティビティ</div>
-      </div>
+  // ============================
+  // モザイク選択
+  // ============================
+  document.getElementById("send-mosaic-list")?.addEventListener("click", e => {
+    const item = e.target.closest(".mosaic-item");
+    if (!item) return;
 
-      <!-- 保有トークン -->
-      <div id="token-content">
-        <div id="mosaic-list">読み込み中...</div>
-      </div>
+    document.getElementById("selected-mosaic-name").textContent = 
+      item.querySelector(".mosaic-name")?.textContent;
 
-      <!-- アクティビティ -->
-      <div id="activity-content" style="display:none;">
-        <div id="tx-list">読み込み中...</div>
-      </div>
-    </div>
-  </div>
+    document.getElementById("selected-mosaic-id").value = 
+      item.querySelector(".mosaic-id")?.textContent;
 
-  <!-- ============================================================
-       モザイク選択画面
-  ============================================================ -->
-  <div id="send-page" class="page">
-    <div class="card">
-      <h2>トークン選択</h2>
-      <button id="back-account" class="button-primary">← 戻る</button>
-      <p>送りたいトークンを選択してください</p>
-      <div id="send-mosaic-list"></div>
-    </div>
-  </div>
+    showPage(transferPage);
+  });
 
-  <!-- ============================================================
-       送金入力画面
-  ============================================================ -->
-  <div id="transfer-page" class="page">
-    <div class="card">
-      <h2>トークン送金</h2>
-      <button id="back-send" class="button-primary">← トークン選択へ戻る</button>
+  // ============================
+  // 送金実行
+  // ============================
+  document.getElementById("btn-transfer")?.addEventListener("click", sendTx);
 
-      <p>
-        <b>送信トークン：</b>
-        <span id="selected-mosaic-name">未選択</span>
-      </p>
-      <p>
-        <b>保有数量：</b>
-        <span id="selected-mosaic-balance">---</span>
-      </p>
+  // ============================
+  // 受取画面
+  // ============================
+  document.getElementById("receive-btn")?.addEventListener("click", async () => {
+    showPage(receivePage);
+    const address = appState.currentAddress.toString();
+    
+    document.getElementById("receive-address").textContent = address;
+    const qr = document.getElementById("receive-qrcode");
+    qr.innerHTML = "";
 
-      <input type="hidden" id="selected-mosaic-id">
-      <input id="tx-recipient" class="input-box" placeholder="宛先アドレス">
-      <input id="tx-amount" class="input-box" type="number" placeholder="数量">
-      <textarea id="tx-message" class="input-box" placeholder="メッセージ（任意）"></textarea>
+    const dataUrl = await QRCode.toDataURL(address, {
+      width: 220,
+      margin: 1
+    });
+    qr.innerHTML = `<img src="${dataUrl}" alt="QR Code">`;
+  });
 
-       <!-- <label class="switch">
-        <input type="checkbox" id="tx-encrypt">
-<span>メッセージを暗号化する</span>
-      </label> 
+  // ============================
+  // ハーベスト画面
+  // ============================
+  document.getElementById("harvest-btn")?.addEventListener("click", async () => {
+    showPage(harvestPage);
+    const address = appState.currentAddress.toString();
+    document.getElementById("harvest-address").textContent = address;
 
-      <br> -->
+    await checkHarvestStatus();
+    await loadHarvestNodeCandidates();
+  });
 
-      <button id="btn-transfer" class="button-primary">送金する</button>
-      <div id="tx-status"></div>
-    </div>
-  </div>
+  // ============================
+  // ハーベスト開始
+  // ============================
+  document.getElementById("start-harvest-btn")?.addEventListener("click", startHarvest);
+  document.getElementById("stop-harvest-btn")?.addEventListener("click", stopHarvest);
 
-  <!-- ============================================================
-       受取画面
-  ============================================================ -->
-  <div id="receive-page" class="page">
-    <div class="card">
-      <h2>受け取り</h2>
-      <button id="back-account-receive" class="button-primary">← 戻る</button>
-      <div id="receive-qrcode"></div>
-      <p id="receive-address" class="address-text"></p>
-      <button id="copy-receive-address" class="button-primary">アドレスをコピー</button>
-    </div>
-  </div>
+  // ============================
+  // 戻る
+  // ============================
+  document.getElementById("back-account")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-send")?.addEventListener("click", () => showPage(sendPage));
+  document.getElementById("back-account-receive")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
 
-  <!-- ============================================================
-       ステーキング画面
-  ============================================================ -->
-  <div id="harvest-page" class="page">
-    <div class="card">
-      <h2>ステーキング設定</h2>
-      <button id="back-account-harvest" class="button-primary">← 戻る</button>
+  // ============================
+  // タブ切替
+  // ============================
+  const tabToken = document.getElementById("tab-token");
+  const tabActivity = document.getElementById("tab-activity");
+  const tokenContent = document.getElementById("token-content");
+  const activityContent = document.getElementById("activity-content");
 
-      <p>アカウント:</p>
-      <div id="harvest-address">---</div>
-      <div>
-        重要度：<span id="harvest-importance">---</span>
-      </div>
+  tabToken?.addEventListener("click", () => {
+    tabToken.classList.add("active");
+    tabActivity.classList.remove("active");
+    tokenContent.style.display = "block";
+    activityContent.style.display = "none";
+  });
 
-      <div id="harvest-badge" class="harvest-badge">状態確認中...</div>
+  tabActivity?.addEventListener("click", () => {
+    tabActivity.classList.add("active");
+    tabToken.classList.remove("active");
+    tokenContent.style.display = "none";
+    activityContent.style.display = "block";
+  });
+  
+  // ============================
+  // アドレスコピー
+  // ============================
+  document.getElementById("copy-address-btn")?.addEventListener("click", () => {
+    navigator.clipboard.writeText(appState.currentAddress.toString());
+    showPopup("アドレスをコピーしました");
+  });
 
-      <hr>
+  // ============================
+  // Tx履歴・WebSocket
+  // ============================
+  await loadRecentTx();
 
-      <h3>委任先ノード</h3>
-      <p style="font-size:13px;color:#94a3b8;">
-        委任ハーベスティングを受け付けているノードを選ぶか、URLを直接入力してください。
-        （下の候補一覧は単にオンラインなノード一覧で、委任ハーベストを受け付けているとは限りません）
-      </p>
-      <select id="harvest-node-select" class="input-box">
-        <option value="">-- 候補を読み込み中... --</option>
-      </select>
-      <input id="harvest-node-input" class="input-box" placeholder="または直接ノードURLを入力 (例: https://xxx.xxx.jp:3001)">
-
-      <hr>
-
-      <h3>設定</h3>
-      <button id="start-harvest-btn" class="button-primary">開始</button>
-      <button id="stop-harvest-btn" class="button-primary">停止</button>
-      <div id="harvest-status">状態確認中...</div>
-    </div>
-  </div>
-
-</div>
-
-<script type="module" src="js/index.js"></script>
-
-</body>
-</html>
+  if (appState.currentAddress) {
+    initWebSocket(appState.currentAddress.toString());
+    initLiveTx(appState.currentAddress.toString());
+  }
+});
