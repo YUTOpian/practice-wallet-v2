@@ -64,6 +64,16 @@ export const appState = {
   // QRコード生成(chain_id)やTransaction検証に必要なネットワーク世代ハッシュ
   generationHash: null,
 
+  // 送金手数料 (feeMultiplier)。設定画面で変更可能。未設定時は100。
+  feeMultiplier: (() => {
+    try {
+      const saved = Number(localStorage.getItem("feeMultiplier"));
+      return Number.isFinite(saved) && saved > 0 ? saved : 100;
+    } catch {
+      return 100;
+    }
+  })(),
+
   // Symbol SDK v3
   facade: null,
   sdkCore: null,
