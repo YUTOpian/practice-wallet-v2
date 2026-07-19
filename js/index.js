@@ -7,6 +7,14 @@ import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
 import { showPopup } from "./utils.js";
 import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates } from "./harvest.js";
+import {
+  showCurrentNode,
+  loadNodeSettingsCandidates,
+  applyNodeChange,
+  loadFeeSettings,
+  selectFeeOption,
+  applyFeeSettings,
+} from "./settings.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -31,6 +39,9 @@ window.addEventListener("load", async () => {
   const transferPage = document.getElementById("transfer-page");
   const receivePage = document.getElementById("receive-page");
   const harvestPage = document.getElementById("harvest-page");
+  const settingsPage = document.getElementById("settings-page");
+  const nodeSettingsPage = document.getElementById("node-settings-page");
+  const feeSettingsPage = document.getElementById("fee-settings-page");
 
   // ============================
   // ページ切替
@@ -160,6 +171,34 @@ window.addEventListener("load", async () => {
   document.getElementById("stop-harvest-btn")?.addEventListener("click", stopHarvest);
 
   // ============================
+  // 設定メニュー
+  // ============================
+  document.getElementById("settings-btn")?.addEventListener("click", () => {
+    showPage(settingsPage);
+  });
+
+  document.getElementById("menu-node-settings")?.addEventListener("click", async () => {
+    showPage(nodeSettingsPage);
+    showCurrentNode();
+    await loadNodeSettingsCandidates();
+  });
+
+  document.getElementById("menu-fee-settings")?.addEventListener("click", async () => {
+    showPage(feeSettingsPage);
+    await loadFeeSettings();
+  });
+
+  document.getElementById("apply-node-btn")?.addEventListener("click", applyNodeChange);
+
+  document.getElementById("fee-options")?.addEventListener("click", e => {
+    const option = e.target.closest(".fee-option");
+    if (!option) return;
+    selectFeeOption(option);
+  });
+
+  document.getElementById("apply-fee-btn")?.addEventListener("click", applyFeeSettings);
+
+  // ============================
   // 戻る
   // ============================
   document.getElementById("back-account")?.addEventListener("click", () => showPage(accountPage));
@@ -168,6 +207,9 @@ window.addEventListener("load", async () => {
   });
   document.getElementById("back-account-receive")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-account-harvest")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-account-settings")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-settings-node")?.addEventListener("click", () => showPage(settingsPage));
+  document.getElementById("back-settings-fee")?.addEventListener("click", () => showPage(settingsPage));
 
   // ============================
   // タブ切替
