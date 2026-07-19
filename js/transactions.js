@@ -2,6 +2,7 @@
 
 import { appState, NetworkType, getXymMosaicIdHex } from "./config.js";
 import { addCallback, getBlockTimestamp } from "./ws.js";
+import { hexToBytes } from "./utils.js";
 
 const txMap = {};
 
@@ -54,6 +55,9 @@ function decodeMessage(payload) {
    Address
    REST APIから来るアドレスは16進エンコード(48文字)の場合と
    既にbase32(39文字)の場合があるため、両方に対応してbase32に統一する
+   ※ Address は sdkCore ではなく sdkSymbol 側のクラス。
+     v3 SDKに fromDecodedAddressHexString のような静的メソッドは無いため、
+     16進文字列→バイト列に変換してコンストラクタに渡す。
 ============================================================ */
 function formatAddress(address) {
   if (!address) return "---";
@@ -70,8 +74,9 @@ function formatAddress(address) {
   if (address.length === 39) return address;
 
   // 16進エンコードされたアドレス(48文字)ならデコードしてbase32に変換
-  if (address.length === 48 && /^[0-9A-Fa-f]+$/.test(address) && appState.sdkCore) {
+  if (address.length === 48 && /^[0-9A-Fa-f]+$/.test(address) && appState.sdkSymbol) {
     try {
+      const bytes = hexToBytes(address);
       return new appState.sdkSymbol.Address(bytes).toString();
     } catch (e) {
       console.warn("address decode failed", e);
@@ -105,7 +110,7 @@ function publicKeyToAddress(pubKeyHex) {
 async function resolveMosaicNames(mosaicIds) {
   const xymId = getXymMosaicIdHex();
 
-  const unknown = [...new Set(mosaicIds)].filter(id =>
+  const unknown = [...new Set(mosaicIds.map(id => id?.toUpperCase()))].filter(id =>
     id &&
     id !== xymId &&
     !appState.mosaicInfo?.[id] &&
@@ -125,7 +130,12 @@ async function resolveMosaicNames(mosaicIds) {
     for (const item of json.mosaicNames || []) {
       const mosaicId = item.mosaicId.toUpperCase();
       if (item.names && item.names.length > 0) {
-        mosaicNameCache[mosaicId] = item.names[0];
+        const first = item.names[0];
+        // names[] の各要素は文字列の場合とオブジェクト({name, parentId, ...})の場合がある
+        const resolvedName = typeof first === "string" ? first : first?.name;
+        if (resolvedName) {
+          mosaicNameCache[mosaicId] = resolvedName;
+        }
       }
     }
   } catch (e) {
@@ -135,7 +145,8 @@ async function resolveMosaicNames(mosaicIds) {
 
 function getMosaicName(id) {
   if (id === getXymMosaicIdHex()) return "XYM";
-  return appState.mosaicInfo?.[id]?.name ?? mosaicNameCache[id] ?? id;
+  const upperId = id?.toUpperCase();
+  return appState.mosaicInfo?.[upperId]?.name ?? mosaicNameCache[upperId] ?? id;
 }
 
 /* ============================================================
@@ -149,7 +160,7 @@ function extractAmount(tx) {
   const direction = signer === myPub ? "send" : "receive";
 
   const mosaics = tx.mosaics.map(mosaic => {
-    const id = mosaic.id;
+    const id = mosaic.id?.toUpperCase();
     const info = appState.mosaicInfo?.[id];
     const divisibility = info?.divisibility ?? 0;
     const name = getMosaicName(id);
