@@ -6,6 +6,7 @@ import { appState } from "./config.js";
 import { setStatus } from "./ui.js";
 import { getRecipientPublicKey } from "./account.js";
 import { hexToBytes } from "./utils.js";
+import { signPayloadLocally, encryptMessageLocally } from "./auth.js";
 
 export async function sendTx() {
   /*
@@ -72,8 +73,9 @@ export async function sendTx() {
     0x00 = Plain Message / 0x01 = Encrypted Message
 
     「メッセージを暗号化する」がチェックされている場合、
-    SSS Extension の requestSignEncription() で受信者の公開鍵を使って
-    メッセージを暗号化する（秘密鍵はSSS Extension内で完結し、ここには出てこない）
+    SSS Extensionログイン時は requestSignEncription()、
+    ニーモニックログイン時はローカルの秘密鍵で暗号化する
+    （SSS利用時は秘密鍵がここに出てくることはない）
   */
   const shouldEncrypt = !!document.getElementById("tx-encrypt")?.checked;
   let message;
@@ -83,20 +85,25 @@ export async function sendTx() {
       setStatus("tx-status", "受信者の公開鍵を取得中...");
       const recipientPubKeyHex = await getRecipientPublicKey(recipientAddress);
 
-      setStatus("tx-status", "SSSでメッセージを暗号化しています...");
-      window.SSS.setMessage(messageText, recipientPubKeyHex);
-      const encrypted = await window.SSS.requestSignEncription();
+      if (appState.authMode === "local") {
+        setStatus("tx-status", "メッセージを暗号化しています...");
+        message = encryptMessageLocally(recipientPubKeyHex, messageText);
+      } else {
+        setStatus("tx-status", "SSSでメッセージを暗号化しています...");
+        window.SSS.setMessage(messageText, recipientPubKeyHex);
+        const encrypted = await window.SSS.requestSignEncription();
 
-      if (!encrypted?.payload) {
-        throw new Error("メッセージの暗号化に失敗しました");
+        if (!encrypted?.payload) {
+          throw new Error("メッセージの暗号化に失敗しました");
+        }
+
+        message = new Uint8Array([0x01, ...hexToBytes(encrypted.payload)]);
+
+        // SSS Extensionのポップアップを閉じた直後に次のポップアップを
+        // 開こうとすると、表示が間に合わず一瞬で消えてしまうことがあるため、
+        // 少し間隔を空けてから次の署名(送金Tx)をリクエストする
+        await new Promise((r) => setTimeout(r, 600));
       }
-
-      message = new Uint8Array([0x01, ...hexToBytes(encrypted.payload)]);
-
-      // SSS Extensionのポップアップを閉じた直後に次のポップアップを
-      // 開こうとすると、表示が間に合わず一瞬で消えてしまうことがあるため、
-      // 少し間隔を空けてから次の署名(送金Tx)をリクエストする
-      await new Promise((r) => setTimeout(r, 600));
     } catch (e) {
       console.error("encrypt message error:", e);
       setStatus(
@@ -123,7 +130,6 @@ export async function sendTx() {
 
   /*
     Transaction作成
-    feeMultiplier 100
     deadline 1時間
   */
   const tx = appState.facade.createTransactionFromTypedDescriptor(
@@ -133,23 +139,31 @@ export async function sendTx() {
     60 * 60
   );
 
-  /*
-    SSSへ渡すpayload生成
-    Symbol v3 serialized transaction
-  */
-  const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
-
   try {
-    setStatus("tx-status", "SSSで署名待ち...");
+    let announceBody;
 
-    /*
-      SSS署名
-    */
-    window.SSS.setTransactionByPayload(payload);
-    const signed = await window.SSS.requestSign();
+    if (appState.authMode === "local") {
+      /*
+        ローカル署名(ニーモニックログイン時)
+        signPayloadLocallyはアナウンス用のJSON文字列をそのまま返す
+      */
+      setStatus("tx-status", "署名しています...");
+      announceBody = signPayloadLocally(tx);
+    } else {
+      /*
+        SSS署名
+      */
+      const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
+      setStatus("tx-status", "SSSで署名待ち...");
 
-    if (!signed?.payload) {
-      throw new Error("SSS signature failed");
+      window.SSS.setTransactionByPayload(payload);
+      const signed = await window.SSS.requestSign();
+
+      if (!signed?.payload) {
+        throw new Error("SSS signature failed");
+      }
+
+      announceBody = JSON.stringify({ payload: signed.payload });
     }
 
     /*
@@ -161,7 +175,7 @@ export async function sendTx() {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ payload: signed.payload })
+      body: announceBody
     });
 
     const result = await response.json();
