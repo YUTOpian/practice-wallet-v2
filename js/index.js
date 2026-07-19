@@ -6,7 +6,7 @@ import { sendTx } from "./transfer.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
 import { showPopup } from "./utils.js";
-import { checkHarvestStatus, startHarvest } from "./harvest.js";
+import { checkHarvestStatus, startHarvest, loadHarvestNodeCandidates } from "./harvest.js";
 import QRCode from "https://esm.sh/qrcode";
 
 window.addEventListener("load", async () => {
@@ -99,8 +99,9 @@ window.addEventListener("load", async () => {
     showPage(harvestPage);
     const address = appState.currentAddress.toString();
     document.getElementById("harvest-address").textContent = address;
-    
+
     await checkHarvestStatus();
+    await loadHarvestNodeCandidates();
   });
 
   // ============================
