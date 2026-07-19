@@ -46,7 +46,6 @@ export async function selectNode(isTestnet) {
         infoEl.innerHTML = renderNodeInfoHtml({
             isTestnet,
             nodeOrigin,
-            note: `ブロック高：${best.height}`
         });
 
         return nodeOrigin;
