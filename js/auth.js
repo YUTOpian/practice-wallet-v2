@@ -25,7 +25,16 @@ async function deriveFromMnemonic(mnemonicPhrase, networkType) {
     "https://esm.sh/symbol-hd-wallets@0.14.2"
   );
 
-  const mnemonic = new MnemonicPassPhrase(mnemonicPhrase.trim().toLowerCase());
+  // 貼り付け時の改行・連続スペース・全角スペースを単一の半角スペースに正規化
+  const normalized = mnemonicPhrase
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\u3000]+/g, " ");
+
+  const wordCount = normalized.split(" ").filter(Boolean).length;
+  console.log("mnemonic word count:", wordCount);
+
+  const mnemonic = new MnemonicPassPhrase(normalized);
   if (!mnemonic.isValid()) {
     throw new Error("ニーモニックの形式が正しくありません（単語数やスペルを確認してください）");
   }
