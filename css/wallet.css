@@ -841,3 +841,41 @@ body {
   font-size: 13px;
   color: #cbd5e1;
 }
+
+/* ============================================================
+   ステーキング(ハーベスト)履歴
+============================================================ */
+#harvest-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.harvest-history-item {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #e5e7eb;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   メッセージ暗号化チェック（送金画面）
+============================================================ */
+.encrypt-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #cbd5e1;
+  margin: 4px 0 12px;
+  cursor: pointer;
+}
+
+.encrypt-option input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
