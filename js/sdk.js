@@ -35,6 +35,9 @@ export async function initSdk() {
   const epochRaw = props.network.epochAdjustment;
   appState.epochAdjustment = Number(epochRaw.replace("s", ""));
 
+  // QRコード生成(chain_id)に必要なネットワーク世代ハッシュ
+  appState.generationHash = props.network.generationHashSeed;
+
   // ネットワーク識別子を取得し Facade 初期化
   const identifier = props.network.identifier;
   appState.facade = new appState.sdkSymbol.SymbolFacade(identifier);
