@@ -13,8 +13,61 @@
 // 参考: https://docs.symbol.dev/concepts/harvesting.html
 //       https://docs.symbol.dev/guides/harvesting/activating-delegated-harvesting-manual.html
 
-import { appState } from "./config.js";
+import { appState, MAINNET_NODEWATCH_URL, TESTNET_NODEWATCH_URL, NetworkType } from "./config.js";
 import { setStatus } from "./ui.js";
+
+/* ============================================================
+   委任先ノード候補の読み込み（NodeWatchから取得しプルダウンに反映）
+   ※ ここで出てくるのは単にオンラインなノード一覧であり、
+     「委任ハーベスティングを受け付けている」保証はない。
+============================================================ */
+export async function loadHarvestNodeCandidates() {
+  const select = document.getElementById("harvest-node-select");
+  if (!select) return;
+
+  select.innerHTML = `<option value="">-- 候補を読み込み中... --</option>`;
+
+  const isTestnet = appState.networkType === NetworkType.TESTNET;
+  const url = isTestnet ? TESTNET_NODEWATCH_URL : MAINNET_NODEWATCH_URL;
+
+  try {
+    const res = await fetch(url);
+    const nodes = await res.json();
+
+    if (!Array.isArray(nodes) || nodes.length === 0) {
+      throw new Error("empty");
+    }
+
+    nodes.sort((a, b) => b.height - a.height);
+
+    select.innerHTML =
+      `<option value="">-- ノードを選択（未選択なら接続中ノードを使用）--</option>` +
+      nodes
+        .slice(0, 30)
+        .map((n) => {
+          const label = `${n.endpoint}（高さ:${n.height}）`;
+          return `<option value="${n.endpoint}">${label}</option>`;
+        })
+        .join("");
+  } catch (e) {
+    console.warn("ノード候補の取得に失敗しました", e);
+    select.innerHTML = `<option value="">-- 候補の取得に失敗（下に直接URLを入力してください）--</option>`;
+  }
+}
+
+/* ============================================================
+   実際に使用する委任先ノードURLを決定
+   優先順位: 直接入力欄 > プルダウン選択 > 現在接続中のノード(appState.NODE)
+============================================================ */
+function getSelectedHarvestNodeUrl() {
+  const manual = document.getElementById("harvest-node-input")?.value?.trim();
+  if (manual) return manual;
+
+  const selected = document.getElementById("harvest-node-select")?.value?.trim();
+  if (selected) return selected;
+
+  return appState.NODE;
+}
 
 /* ============================================================
    直近生成したリモート鍵・VRF鍵（セッション内のみ保持）
@@ -41,11 +94,11 @@ function toHex(bytesOrKey) {
    ※ これは NodeKeyLinkTransaction 用の鍵であり、
      REST証明書(CA)公開鍵とは別物なので注意
 ============================================================ */
-async function fetchNodePublicKey() {
-  const res = await fetch(new URL("/node/info", appState.NODE));
+async function fetchNodePublicKey(nodeUrl) {
+  const res = await fetch(new URL("/node/info", nodeUrl));
   const info = await res.json();
   if (!info.nodePublicKey) {
-    throw new Error("ノードから nodePublicKey を取得できませんでした");
+    throw new Error(`ノード(${nodeUrl})から nodePublicKey を取得できませんでした`);
   }
   return new appState.sdkCore.PublicKey(info.nodePublicKey);
 }
@@ -147,7 +200,11 @@ async function signAndAnnounce(tx) {
     throw new Error(result.message ?? "アナウンス失敗");
   }
 
-  const hash = appState.facade.hashTransaction(tx).toString();
+  // ★ハッシュは「署名済み」のペイロードから計算し直す
+  //   （署名前のtxオブジェクトのままだと署名欄が空でハッシュが一致しない）
+  const signedBytes = appState.sdkCore.utils.hexToUint8(signed.payload);
+  const signedTx = appState.facade.transactionFactory.static.deserialize(signedBytes);
+  const hash = appState.facade.hashTransaction(signedTx).toString();
   return hash;
 }
 
@@ -274,8 +331,13 @@ export async function startHarvest() {
       throw new Error("SDK未初期化またはアカウント未接続です");
     }
 
-    setLine("ノード情報取得中...");
-    const nodePublicKey = await fetchNodePublicKey();
+    const harvestNodeUrl = getSelectedHarvestNodeUrl();
+    if (!harvestNodeUrl) {
+      throw new Error("委任先ノードが指定されていません");
+    }
+
+    setLine(`ノード情報取得中... (${harvestNodeUrl})`);
+    const nodePublicKey = await fetchNodePublicKey(harvestNodeUrl);
 
     setLine("リモート鍵・VRF鍵を生成中...");
     const remoteKeyPair = new appState.sdkSymbol.KeyPair(randomPrivateKey());
