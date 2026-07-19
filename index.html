@@ -23,7 +23,10 @@
   ============================================================ -->
   <div id="account-page" class="page active">
     <div class="card">
+    <div class="card-title-row">
       <h2>アカウント情報</h2>
+      <button id="settings-btn" class="settings-gear-btn" title="設定">⚙️</button>
+    </div>
 
       <p><b>アドレス：</b></p>
       <div class="address-row">
@@ -155,6 +158,87 @@
       <button id="start-harvest-btn" class="button-primary">開始</button>
       <button id="stop-harvest-btn" class="button-primary">停止</button>
       <div id="harvest-status">状態確認中...</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       設定メニュー画面
+  ============================================================ -->
+  <div id="settings-page" class="page">
+    <div class="card">
+      <h2>設定</h2>
+      <button id="back-account-settings" class="button-primary">← 戻る</button>
+
+      <div class="settings-menu">
+        <button id="menu-node-settings" class="settings-menu-item">
+          接続先ノードの変更
+        </button>
+        <button id="menu-fee-settings" class="settings-menu-item">
+          送金手数料の設定
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       接続先ノードの変更画面
+  ============================================================ -->
+  <div id="node-settings-page" class="page">
+    <div class="card">
+      <h2>接続先ノードの変更</h2>
+      <button id="back-settings-node" class="button-primary">← 戻る</button>
+
+      <p><b>現在のノード：</b></p>
+      <div id="current-node-display" class="address-text">---</div>
+
+      <hr>
+
+      <h3>ノード候補</h3>
+      <select id="node-settings-select" class="input-box">
+        <option value="">-- 候補を読み込み中... --</option>
+      </select>
+      <input id="node-settings-input" class="input-box" placeholder="または直接ノードURLを入力 (例: https://xxx.xxx.jp:3001)">
+
+      <button id="apply-node-btn" class="button-primary">このノードに接続する</button>
+      <div id="node-settings-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       送金手数料の設定画面
+  ============================================================ -->
+  <div id="fee-settings-page" class="page">
+    <div class="card">
+      <h2>送金手数料の設定</h2>
+      <button id="back-settings-fee" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        ネットワークの直近の手数料状況をもとにした目安です。タップすると下の入力欄に反映されます。
+        実際に使われる値は下の「feeMultiplier」欄の数値です。
+      </p>
+
+      <div id="fee-options">
+        <div class="fee-option" data-speed="slow">
+          <div class="fee-option-title">🐢 遅い（安い）</div>
+          <div class="fee-option-value" id="fee-slow-value">---</div>
+        </div>
+        <div class="fee-option" data-speed="average">
+          <div class="fee-option-title">🚶 平均</div>
+          <div class="fee-option-value" id="fee-average-value">---</div>
+        </div>
+        <div class="fee-option" data-speed="fast">
+          <div class="fee-option-title">🚀 速い（高い）</div>
+          <div class="fee-option-value" id="fee-fast-value">---</div>
+        </div>
+      </div>
+
+      <hr>
+
+      <p><b>feeMultiplier（実際に送金時に使う値）：</b></p>
+      <input id="fee-custom-input" class="input-box" type="number" min="0" placeholder="例: 100">
+
+      <button id="apply-fee-btn" class="button-primary">この設定を保存する</button>
+      <div id="fee-settings-status"></div>
     </div>
   </div>
 
