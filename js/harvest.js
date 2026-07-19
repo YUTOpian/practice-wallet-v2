@@ -182,7 +182,7 @@ async function announceKeyLinks(remoteKeyPair, vrfKeyPair, nodePublicKey) {
   ];
 
   const aggregateDescriptor = new descriptors.AggregateCompleteTransactionV2Descriptor(
-    appState.facade.hashEmbeddedTransactions(embedded),
+    appState.facade.static.hashEmbeddedTransactions(embedded),
     embedded
   );
 
