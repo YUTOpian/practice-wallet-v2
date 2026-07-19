@@ -1,11 +1,11 @@
 // index.js
 
-import { appState } from "./config.js";
-import { autoConnectSSS } from "./sss.js";
+import { appState, NetworkType } from "./config.js";
 import { sendTx } from "./transfer.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
 import { showPopup } from "./utils.js";
+import { setStatus } from "./ui.js";
 import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates, loadHarvestHistory } from "./harvest.js";
 import {
   showCurrentNode,
@@ -15,25 +15,26 @@ import {
   selectFeeOption,
   applyFeeSettings,
 } from "./settings.js";
+import {
+  connectWithSSS,
+  loginWithMnemonic,
+  hasVault,
+  unlockVault,
+  saveVault,
+  clearVault,
+} from "./auth.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
 
 window.addEventListener("load", async () => {
   // ============================
-  // SSS初期化
-  // ============================
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  await autoConnectSSS();
-
-  if (!window.SSS || !window.SSS.activePublicKey) {
-    showPopup("⚠️ SSS Extension とリンクしてください", true);
-    return;
-  }
-
-  // ============================
   // ページ取得
   // ============================
+  const welcomePage = document.getElementById("welcome-page");
+  const mnemonicImportPage = document.getElementById("mnemonic-import-page");
+  const passwordSetupPage = document.getElementById("password-setup-page");
+  const unlockPage = document.getElementById("unlock-page");
   const accountPage = document.getElementById("account-page");
   const sendPage = document.getElementById("send-page");
   const transferPage = document.getElementById("transfer-page");
@@ -52,6 +53,132 @@ window.addEventListener("load", async () => {
     });
     page.classList.add("active");
   }
+
+  function goHome() {
+    showPage(accountPage);
+  }
+
+  // ============================
+  // 起動時の初期画面判定
+  // 保存済みアカウント(パスワード設定済み)があればロック解除画面、
+  // なければログイン方法選択画面を表示する
+  // ============================
+  if (hasVault()) {
+    showPage(unlockPage);
+  } else {
+    showPage(welcomePage);
+  }
+
+  // ============================
+  // SSS Extensionと接続
+  // ============================
+  document.getElementById("choose-sss")?.addEventListener("click", async () => {
+    setStatus("welcome-status", "SSS Extensionに接続中...");
+    try {
+      await connectWithSSS();
+      goHome();
+    } catch (e) {
+      console.error("connectWithSSS error:", e);
+      setStatus("welcome-status", e.message || "SSS Extensionとの接続に失敗しました。", "error");
+    }
+  });
+
+  // ============================
+  // ニーモニックインポート画面へ
+  // ============================
+  document.getElementById("choose-mnemonic")?.addEventListener("click", () => {
+    showPage(mnemonicImportPage);
+  });
+
+  document.getElementById("back-welcome-mnemonic")?.addEventListener("click", () => showPage(welcomePage));
+
+  // インポート成功後、パスワード設定画面に渡すために一時保持
+  // (パスワード未設定ならこの時点でメモリから破棄する)
+  let pendingMnemonic = "";
+  let pendingNetworkType = NetworkType.MAINNET;
+
+  document.getElementById("import-mnemonic-btn")?.addEventListener("click", async () => {
+    const mnemonicPhrase = document.getElementById("mnemonic-input").value.trim();
+    const networkChoice = document.getElementById("mnemonic-network-select").value;
+    const networkType = networkChoice === "testnet" ? NetworkType.TESTNET : NetworkType.MAINNET;
+
+    if (!mnemonicPhrase) {
+      setStatus("mnemonic-import-status", "ニーモニックを入力してください。", "error");
+      return;
+    }
+
+    setStatus("mnemonic-import-status", "インポート中...");
+    try {
+      await loginWithMnemonic(mnemonicPhrase, networkType);
+      pendingMnemonic = mnemonicPhrase;
+      pendingNetworkType = networkType;
+      document.getElementById("mnemonic-input").value = "";
+      setStatus("mnemonic-import-status", "", "default");
+      showPage(passwordSetupPage);
+    } catch (e) {
+      console.error("loginWithMnemonic error:", e);
+      setStatus("mnemonic-import-status", e.message || "インポートに失敗しました。", "error");
+    }
+  });
+
+  // ============================
+  // パスワード設定(任意)
+  // ============================
+  document.getElementById("save-password-btn")?.addEventListener("click", async () => {
+    const pw = document.getElementById("setup-password-input").value;
+    const pwConfirm = document.getElementById("setup-password-confirm").value;
+
+    if (!pw || pw.length < 8) {
+      setStatus("password-setup-status", "8文字以上のパスワードを入力してください。", "error");
+      return;
+    }
+    if (pw !== pwConfirm) {
+      setStatus("password-setup-status", "パスワードが一致しません。", "error");
+      return;
+    }
+
+    try {
+      await saveVault(pendingMnemonic, pendingNetworkType, pw);
+      pendingMnemonic = "";
+      document.getElementById("setup-password-input").value = "";
+      document.getElementById("setup-password-confirm").value = "";
+      goHome();
+    } catch (e) {
+      console.error("saveVault error:", e);
+      setStatus("password-setup-status", "保存に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("skip-password-btn")?.addEventListener("click", () => {
+    pendingMnemonic = "";
+    goHome();
+  });
+
+  // ============================
+  // ロック解除(保存済みアカウントでログイン)
+  // ============================
+  document.getElementById("unlock-btn")?.addEventListener("click", async () => {
+    const pw = document.getElementById("unlock-password-input").value;
+    if (!pw) {
+      setStatus("unlock-status", "パスワードを入力してください。", "error");
+      return;
+    }
+    setStatus("unlock-status", "ログイン中...");
+    try {
+      await unlockVault(pw);
+      document.getElementById("unlock-password-input").value = "";
+      goHome();
+    } catch (e) {
+      console.error("unlockVault error:", e);
+      setStatus("unlock-status", e.message || "ログインに失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("forget-account-btn")?.addEventListener("click", () => {
+    if (!confirm("保存済みのアカウント情報をこの端末から削除します。よろしいですか？")) return;
+    clearVault();
+    showPage(welcomePage);
+  });
 
   // 送金画面に「保有トークン一覧」から直接入ったかどうか
   let cameFromMosaicList = false;
@@ -241,14 +368,4 @@ window.addEventListener("load", async () => {
     navigator.clipboard.writeText(appState.currentAddress.toString());
     showPopup("アドレスをコピーしました");
   });
-
-  // ============================
-  // Tx履歴・WebSocket
-  // ============================
-  await loadRecentTx();
-
-  if (appState.currentAddress) {
-    initWebSocket(appState.currentAddress.toString());
-    initLiveTx(appState.currentAddress.toString());
-  }
 });
