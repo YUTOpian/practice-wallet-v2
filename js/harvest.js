@@ -5,16 +5,19 @@
 //   ① AccountKeyLinkTransaction  … メインアカウントの重要度をリモート署名アカウントへ委任
 //   ② VrfKeyLinkTransaction      … VRF鍵をメインアカウントにリンク（委任ハーベスト必須）
 //   ③ NodeKeyLinkTransaction     … どのノードに委任するかをオンチェーンで宣言
-//   ①②③は1つのAggregate Complete Transactionにまとめ、SSSで署名してアナウンスする
+//   ①②③は1つのAggregate Complete Transactionにまとめ、署名してアナウンスする
 //   ④ PersistentDelegationRequestTransaction
 //        … リモート鍵・VRF鍵の秘密鍵を「ノード宛」に暗号化したメッセージとして
 //          TransferTransactionに載せて送る。これでノードがハーベスト委任を認識する。
+//
+// 署名はSSS Extension / ニーモニックログイン(ローカル署名)の両方に対応。
 //
 // 参考: https://docs.symbol.dev/concepts/harvesting.html
 //       https://docs.symbol.dev/guides/harvesting/activating-delegated-harvesting-manual.html
 
 import { appState, MAINNET_NODEWATCH_URL, TESTNET_NODEWATCH_URL, NetworkType } from "./config.js";
 import { setStatus } from "./ui.js";
+import { signPayloadLocally } from "./auth.js";
 
 /* ============================================================
    委任先ノード候補の読み込み（NodeWatchから取得しプルダウンに反映）
@@ -193,22 +196,42 @@ async function waitConfirmed(hash, { timeoutMs = 60000, intervalMs = 3000 } = {}
 }
 
 /* ============================================================
-   SSSで署名 → アナウンス（共通処理）
+   署名 → アナウンス（共通処理）
+   SSS Extension / ニーモニックログイン(ローカル署名)の両方に対応
 ============================================================ */
 async function signAndAnnounce(tx) {
-  const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
+  let announceBody;
+  let signedBytes;
 
-  window.SSS.setTransactionByPayload(payload);
-  const signed = await window.SSS.requestSign();
+  if (appState.authMode === "local") {
+    /*
+      ローカル署名(ニーモニックログイン時)
+      signPayloadLocallyはアナウンス用のJSON文字列をそのまま返す
+    */
+    announceBody = signPayloadLocally(tx);
+    const parsed = JSON.parse(announceBody);
+    signedBytes = appState.sdkCore.utils.hexToUint8(parsed.payload);
+  } else {
+    /*
+      SSS署名
+    */
+    const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
 
-  if (!signed?.payload) {
-    throw new Error("SSS署名に失敗しました");
+    window.SSS.setTransactionByPayload(payload);
+    const signed = await window.SSS.requestSign();
+
+    if (!signed?.payload) {
+      throw new Error("SSS署名に失敗しました");
+    }
+
+    announceBody = JSON.stringify({ payload: signed.payload });
+    signedBytes = appState.sdkCore.utils.hexToUint8(signed.payload);
   }
 
   const res = await fetch(new URL("/transactions", appState.NODE), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ payload: signed.payload }),
+    body: announceBody,
   });
 
   const result = await res.json();
@@ -220,7 +243,6 @@ async function signAndAnnounce(tx) {
 
   // ★ハッシュは「署名済み」のペイロードから計算し直す
   //   （署名前のtxオブジェクトのままだと署名欄が空でハッシュが一致しない）
-  const signedBytes = appState.sdkCore.utils.hexToUint8(signed.payload);
   const signedTx = appState.facade.transactionFactory.static.deserialize(signedBytes);
   const hash = appState.facade.hashTransaction(signedTx).toString();
   return hash;
@@ -264,7 +286,7 @@ async function announceKeyLinks(remoteKeyPair, vrfKeyPair, nodePublicKey) {
   const aggregateTx = appState.facade.createTransactionFromTypedDescriptor(
     aggregateDescriptor,
     appState.currentPubKey,
-    100,
+    appState.feeMultiplier ?? 100,
     60 * 60
   );
 
@@ -327,7 +349,7 @@ async function announcePersistentDelegationRequest(remoteKeyPair, vrfKeyPair, no
   const transferTx = appState.facade.createTransactionFromTypedDescriptor(
     transferDescriptor,
     appState.currentPubKey,
-    100,
+    appState.feeMultiplier ?? 100,
     60 * 60
   );
 
@@ -430,7 +452,11 @@ export async function startHarvest() {
       lastGeneratedKeys
     );
 
-    setLine("① AccountKeyLink / ② VrfKeyLink / ③ NodeKeyLink をSSSで署名してください...");
+    setLine(
+      appState.authMode === "local"
+        ? "① AccountKeyLink / ② VrfKeyLink / ③ NodeKeyLink を署名しています..."
+        : "① AccountKeyLink / ② VrfKeyLink / ③ NodeKeyLink をSSSで署名してください..."
+    );
     const aggHash = await announceKeyLinks(remoteKeyPair, vrfKeyPair, nodePublicKey);
     setLine(`鍵リンクTx送信済み (${aggHash.slice(0, 12)}...) 承認待ち...`);
 
@@ -546,11 +572,15 @@ export async function stopHarvest() {
     const aggregateTx = appState.facade.createTransactionFromTypedDescriptor(
       aggregateDescriptor,
       appState.currentPubKey,
-      100,
+      appState.feeMultiplier ?? 100,
       60 * 60
     );
 
-    setLine("解除トランザクションをSSSで署名してください...");
+    setLine(
+      appState.authMode === "local"
+        ? "解除トランザクションを署名しています..."
+        : "解除トランザクションをSSSで署名してください..."
+    );
     const hash = await signAndAnnounce(aggregateTx);
     setLine(`解除Tx送信済み (${hash.slice(0, 12)}...) 承認待ち...`);
 
