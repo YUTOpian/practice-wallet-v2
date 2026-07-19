@@ -61,6 +61,9 @@ export const appState = {
   // Transaction用
   epochAdjustment: 0,
 
+  // QRコード生成(chain_id)やTransaction検証に必要なネットワーク世代ハッシュ
+  generationHash: null,
+
   // Symbol SDK v3
   facade: null,
   sdkCore: null,
