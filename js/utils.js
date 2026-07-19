@@ -99,6 +99,8 @@ export function hexToUint8Array(hex) {
 // SSS Extension 連携状態
 // ============================================================
 
+import { appState } from "./config.js";
+
 export function isSSSConnected() {
   return !!(window.SSS && window.SSS.activePublicKey);
 }
@@ -114,6 +116,8 @@ export function getSSSStatusHtml() {
 // ネットワーク表記（Mainnet/Testnet）＋使用ノード＋SSS連携状態を
 // 常にまとめて表示するための共通関数
 // （ノード切替時にも表記が消えないようにする）
+// ニーモニックログイン中(authMode === "local")はSSSと無関係なので
+// SSS連携状態は表示しない
 // ============================================================
 
 export function renderNodeInfoHtml({ isTestnet, nodeOrigin, note = "" }) {
@@ -123,6 +127,6 @@ export function renderNodeInfoHtml({ isTestnet, nodeOrigin, note = "" }) {
     `</div>` +
     `使用ノード：<b>${nodeOrigin}</b><br>` +
     (note ? `${note}<br>` : "") +
-    getSSSStatusHtml()
+    (appState.authMode === "local" ? "" : getSSSStatusHtml())
   );
 }
