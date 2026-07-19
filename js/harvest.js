@@ -109,10 +109,18 @@ async function fetchNodePublicKey(nodeUrl) {
 export async function checkHarvestStatus() {
   const statusEl = document.getElementById("harvest-status");
   const importanceEl = document.getElementById("harvest-importance");
+  const badgeEl = document.getElementById("harvest-badge");
   if (!statusEl) return;
+
+  const setBadge = (cls, text) => {
+    if (!badgeEl) return;
+    badgeEl.className = `harvest-badge ${cls}`;
+    badgeEl.textContent = text;
+  };
 
   try {
     statusEl.textContent = "状態確認中...";
+    setBadge("", "確認中...");
 
     const address = appState.currentAddress.toString();
     const res = await fetch(`${appState.NODE}/accounts/${address}`);
@@ -121,6 +129,7 @@ export async function checkHarvestStatus() {
 
     if (!account) {
       statusEl.textContent = "アカウント情報取得失敗";
+      setBadge("inactive", "❌ アカウント未登録");
       return;
     }
 
@@ -131,20 +140,29 @@ export async function checkHarvestStatus() {
       importanceEl.textContent = importance ? BigInt(importance).toString() : "0";
     }
 
-    // supplementalPublicKeys があれば委任状況もついでに表示
+    // supplementalPublicKeys の有無で委任状況を判定
     const keys = account.supplementalPublicKeys;
-    const linkedInfo = keys
-      ? `linked:${!!keys.linked} vrf:${!!keys.vrf} node:${!!keys.node}`
-      : "";
+    const linked = !!keys?.linked;
+    const vrf = !!keys?.vrf;
+    const node = !!keys?.node;
+    const linkedInfo = `remote:${linked} vrf:${vrf} node:${node}`;
 
-    if (importance && Number(importance) > 0) {
-      statusEl.textContent = `✅ ハーベスト可能状態 ${linkedInfo}`;
+    if (linked && vrf && node) {
+      setBadge("active", "✅ 委任ハーベスティング設定済み（鍵リンク完了）");
+    } else if (linked || vrf || node) {
+      setBadge("partial", "⚠️ 一部の鍵のみリンク済み（設定不完全）");
     } else {
-      statusEl.textContent = `❌ ハーベスト未設定 ${linkedInfo}`;
+      setBadge("inactive", "❌ 委任ハーベスティング未設定");
     }
+
+    statusEl.textContent =
+      importance && Number(importance) > 0
+        ? `重要度あり ${linkedInfo}`
+        : `重要度なし ${linkedInfo}`;
   } catch (e) {
     console.error("Harvest status error:", e);
     statusEl.textContent = "状態取得エラー";
+    setBadge("inactive", "❌ 状態取得エラー");
   }
 }
 
@@ -381,19 +399,111 @@ export async function startHarvest() {
 
 /* ============================================================
    委任解除（Unlink）
-   ※ 停止する場合は ①②③ を LinkAction.UNLINK で同じキーを使って
-     再アナウンスする必要がある（symbol仕様）。
-     現在保持しているキーが無い場合は解除できない点に注意。
+   ※ セッション内の一時キーには依存せず、REST APIで
+     「現在チェーン上にリンクされている公開鍵」を取得して
+     それをUNLINKする。これによりページ再読み込み後でも解除可能。
 ============================================================ */
 export async function stopHarvest() {
   const statusEl = document.getElementById("harvest-status");
-  if (!lastGeneratedKeys) {
-    alert(
-      "このセッションで生成したリモート鍵・VRF鍵の情報がありません。\n" +
-      "解除するには、当時使用した鍵情報が必要です。"
+  const setLine = (text) => {
+    if (statusEl) statusEl.textContent = text;
+    console.log("[harvest]", text);
+  };
+
+  try {
+    if (!appState.facade || !appState.currentPubKey) {
+      throw new Error("SDK未初期化またはアカウント未接続です");
+    }
+
+    setLine("現在の委任状況を確認中...");
+    const address = appState.currentAddress.toString();
+    const res = await fetch(`${appState.NODE}/accounts/${address}`);
+    const json = await res.json();
+    const keys = json.account?.supplementalPublicKeys;
+
+    const linkedHex = keys?.linked?.publicKey;
+    const vrfHex = keys?.vrf?.publicKey;
+    const nodeHex = keys?.node?.publicKey;
+
+    if (!linkedHex && !vrfHex && !nodeHex) {
+      setLine("解除対象がありません（未設定）");
+      alert("現在、委任ハーベスティングの鍵リンクは設定されていません。");
+      return;
+    }
+
+    const summary = [
+      linkedHex ? `remote: ${linkedHex}` : null,
+      vrfHex ? `vrf: ${vrfHex}` : null,
+      nodeHex ? `node: ${nodeHex}` : null,
+    ].filter(Boolean).join("\n");
+
+    if (!confirm(`以下のリンクを解除します。よろしいですか？\n\n${summary}`)) {
+      setLine("解除をキャンセルしました");
+      return;
+    }
+
+    const { descriptors, models } = appState.sdkSymbol;
+    const embedded = [];
+
+    if (linkedHex) {
+      embedded.push(
+        appState.facade.createEmbeddedTransactionFromTypedDescriptor(
+          new descriptors.AccountKeyLinkTransactionV1Descriptor(
+            new appState.sdkCore.PublicKey(linkedHex),
+            models.LinkAction.UNLINK
+          ),
+          appState.currentPubKey
+        )
+      );
+    }
+    if (vrfHex) {
+      embedded.push(
+        appState.facade.createEmbeddedTransactionFromTypedDescriptor(
+          new descriptors.VrfKeyLinkTransactionV1Descriptor(
+            new appState.sdkCore.PublicKey(vrfHex),
+            models.LinkAction.UNLINK
+          ),
+          appState.currentPubKey
+        )
+      );
+    }
+    if (nodeHex) {
+      embedded.push(
+        appState.facade.createEmbeddedTransactionFromTypedDescriptor(
+          new descriptors.NodeKeyLinkTransactionV1Descriptor(
+            new appState.sdkCore.PublicKey(nodeHex),
+            models.LinkAction.UNLINK
+          ),
+          appState.currentPubKey
+        )
+      );
+    }
+
+    const aggregateDescriptor = new descriptors.AggregateCompleteTransactionV2Descriptor(
+      appState.facade.static.hashEmbeddedTransactions(embedded),
+      embedded
     );
-    return;
+
+    const aggregateTx = appState.facade.createTransactionFromTypedDescriptor(
+      aggregateDescriptor,
+      appState.currentPubKey,
+      100,
+      60 * 60
+    );
+
+    setLine("解除トランザクションをSSSで署名してください...");
+    const hash = await signAndAnnounce(aggregateTx);
+    setLine(`解除Tx送信済み (${hash.slice(0, 12)}...) 承認待ち...`);
+
+    await waitConfirmed(hash);
+
+    lastGeneratedKeys = null;
+    setLine("✅ 委任ハーベスティングを解除しました");
+    await checkHarvestStatus();
+    alert("委任ハーベスティングの解除が完了しました。");
+  } catch (e) {
+    console.error("stopHarvest error:", e);
+    setLine("❌ 解除失敗: " + e.message);
+    alert("解除失敗: " + e.message);
   }
-  // TODO: announceKeyLinks と同様の構成で LinkAction.UNLINK を使って実装
-  alert("停止処理は未実装です。UNLINKトランザクションの実装が必要です。");
 }
