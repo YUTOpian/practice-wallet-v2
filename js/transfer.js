@@ -4,6 +4,8 @@
 
 import { appState } from "./config.js";
 import { setStatus } from "./ui.js";
+import { getRecipientPublicKey } from "./account.js";
+import { hexToBytes } from "./utils.js";
 
 export async function sendTx() {
   /*
@@ -67,10 +69,42 @@ export async function sendTx() {
   /*
     Message
     速習Symbol v3形式
-    0x00 = Plain Message
+    0x00 = Plain Message / 0x01 = Encrypted Message
+
+    「メッセージを暗号化する」がチェックされている場合、
+    SSS Extension の requestSignEncription() で受信者の公開鍵を使って
+    メッセージを暗号化する（秘密鍵はSSS Extension内で完結し、ここには出てこない）
   */
-  const messageBytes = new TextEncoder().encode(messageText);
-  const message = new Uint8Array([0x00, ...messageBytes]);
+  const shouldEncrypt = !!document.getElementById("tx-encrypt")?.checked;
+  let message;
+
+  if (shouldEncrypt && messageText.trim() !== "") {
+    try {
+      setStatus("tx-status", "受信者の公開鍵を取得中...");
+      const recipientPubKeyHex = await getRecipientPublicKey(recipientAddress);
+
+      setStatus("tx-status", "SSSでメッセージを暗号化しています...");
+      window.SSS.setMessage(messageText, recipientPubKeyHex);
+      const encrypted = await window.SSS.requestSignEncription();
+
+      if (!encrypted?.payload) {
+        throw new Error("メッセージの暗号化に失敗しました");
+      }
+
+      message = new Uint8Array([0x01, ...hexToBytes(encrypted.payload)]);
+    } catch (e) {
+      console.error("encrypt message error:", e);
+      setStatus(
+        "tx-status",
+        "メッセージの暗号化に失敗しました（受信者アカウントに公開鍵が公開されていない可能性があります）。",
+        "error"
+      );
+      return;
+    }
+  } else {
+    const messageBytes = new TextEncoder().encode(messageText);
+    message = new Uint8Array([0x00, ...messageBytes]);
+  }
 
   /*
     Transfer Descriptor
