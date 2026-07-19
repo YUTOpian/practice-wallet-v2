@@ -335,6 +335,65 @@ async function announcePersistentDelegationRequest(remoteKeyPair, vrfKeyPair, no
 }
 
 /* ============================================================
+   ステーキング(ハーベスト)履歴
+   このアカウントが実際にハーベスト(ブロック生成)した履歴を
+   /blocks?signerPublicKey= で取得して一覧表示する
+============================================================ */
+export async function loadHarvestHistory() {
+  const el = document.getElementById("harvest-history");
+  if (!el) return;
+
+  el.textContent = "読み込み中...";
+
+  try {
+    if (!appState.NODE || !appState.currentPubKey) {
+      throw new Error("アカウント未接続です");
+    }
+
+    const params = new URLSearchParams({
+      signerPublicKey: appState.currentPubKey,
+      order: "desc",
+      pageSize: 10,
+    });
+
+    const res = await fetch(`${appState.NODE}/blocks?${params}`);
+    const json = await res.json();
+    const items = json.data ?? [];
+
+    if (items.length === 0) {
+      el.innerHTML = `<div>ハーベスト履歴はありません</div>`;
+      return;
+    }
+
+    el.innerHTML = items.map((item) => {
+      const block = item.block;
+      const height = block.height;
+
+      const feeXym = block.totalFee
+        ? (Number(block.totalFee) / 1_000_000).toLocaleString("ja-JP", { maximumFractionDigits: 6 })
+        : "0";
+
+      let dateStr = "---";
+      if (appState.epochAdjustment && block.timestamp) {
+        const unixMs = Number(appState.epochAdjustment) * 1000 + Number(block.timestamp);
+        dateStr = new Date(unixMs).toLocaleString("ja-JP", { hour12: false });
+      }
+
+      return `
+        <div class="harvest-history-item">
+          <div>高さ: ${height}</div>
+          <div>日時: ${dateStr}</div>
+          <div>獲得手数料(概算): ${feeXym} XYM</div>
+        </div>
+      `;
+    }).join("");
+  } catch (e) {
+    console.error("loadHarvestHistory error:", e);
+    el.textContent = "履歴取得エラー";
+  }
+}
+
+/* ============================================================
    委任ハーベスティング開始（メインエントリポイント）
 ============================================================ */
 export async function startHarvest() {
