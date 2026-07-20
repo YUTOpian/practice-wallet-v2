@@ -23,7 +23,17 @@ import {
   saveVault,
   clearVault,
   logout,
+  switchToAccount,
+  setAccountHidden,
+  addAccountFromMnemonic,
+  addAccountFromPrivateKey,
 } from "./auth.js";
+import {
+  updateSwitcherVisibility,
+  renderAccountSwitcherList,
+  renderHiddenAccountList,
+  nextMnemonicAccountIndex,
+} from "./accountSwitcher.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -44,6 +54,11 @@ window.addEventListener("load", async () => {
   const settingsPage = document.getElementById("settings-page");
   const nodeSettingsPage = document.getElementById("node-settings-page");
   const feeSettingsPage = document.getElementById("fee-settings-page");
+  const accountSwitcherPage = document.getElementById("account-switcher-page");
+  const hiddenAccountsPage = document.getElementById("hidden-accounts-page");
+  const addAccountMenuPage = document.getElementById("add-account-menu-page");
+  const addAccountMnemonicPage = document.getElementById("add-account-mnemonic-page");
+  const addAccountPrivatekeyPage = document.getElementById("add-account-privatekey-page");
 
   // ============================
   // ページ切替
@@ -56,6 +71,7 @@ window.addEventListener("load", async () => {
   }
 
   function goHome() {
+    updateSwitcherVisibility();
     showPage(accountPage);
   }
 
@@ -93,11 +109,6 @@ window.addEventListener("load", async () => {
 
   document.getElementById("back-welcome-mnemonic")?.addEventListener("click", () => showPage(welcomePage));
 
-  // インポート成功後、パスワード設定画面に渡すために一時保持
-  // (パスワード未設定ならこの時点でメモリから破棄する)
-  let pendingMnemonic = "";
-  let pendingNetworkType = NetworkType.MAINNET;
-
   document.getElementById("import-mnemonic-btn")?.addEventListener("click", async () => {
     const mnemonicPhrase = document.getElementById("mnemonic-input").value.trim();
     const networkChoice = document.getElementById("mnemonic-network-select").value;
@@ -111,8 +122,6 @@ window.addEventListener("load", async () => {
     setStatus("mnemonic-import-status", "インポート中...");
     try {
       await loginWithMnemonic(mnemonicPhrase, networkType);
-      pendingMnemonic = mnemonicPhrase;
-      pendingNetworkType = networkType;
       document.getElementById("mnemonic-input").value = "";
       setStatus("mnemonic-import-status", "", "default");
       showPage(passwordSetupPage);
@@ -124,6 +133,8 @@ window.addEventListener("load", async () => {
 
   // ============================
   // パスワード設定(任意)
+  // この時点でアカウントは既にappState.accountsに追加済みなので、
+  // saveVaultはパスワードだけ受け取って現在のアカウント一覧を暗号化保存する
   // ============================
   document.getElementById("save-password-btn")?.addEventListener("click", async () => {
     const pw = document.getElementById("setup-password-input").value;
@@ -139,8 +150,7 @@ window.addEventListener("load", async () => {
     }
 
     try {
-      await saveVault(pendingMnemonic, pendingNetworkType, pw);
-      pendingMnemonic = "";
+      await saveVault(pw);
       document.getElementById("setup-password-input").value = "";
       document.getElementById("setup-password-confirm").value = "";
       goHome();
@@ -151,7 +161,6 @@ window.addEventListener("load", async () => {
   });
 
   document.getElementById("skip-password-btn")?.addEventListener("click", () => {
-    pendingMnemonic = "";
     goHome();
   });
 
@@ -334,6 +343,120 @@ window.addEventListener("load", async () => {
   });
 
   // ============================
+  // アカウント切替(▼マーク)
+  // ============================
+  document.getElementById("account-switch-btn")?.addEventListener("click", () => {
+    renderAccountSwitcherList();
+    showPage(accountSwitcherPage);
+  });
+
+  document.getElementById("account-switcher-list")?.addEventListener("click", async e => {
+    const hideBtn = e.target.closest('[data-action="hide"]');
+    if (hideBtn) {
+      const id = hideBtn.dataset.id;
+      await setAccountHidden(id, true);
+      renderAccountSwitcherList();
+      return;
+    }
+
+    const row = e.target.closest('[data-action="switch"]');
+    if (row) {
+      const id = row.dataset.id;
+      if (id === appState.activeAccountId) return;
+      try {
+        await switchToAccount(id);
+        updateSwitcherVisibility();
+        goHome();
+      } catch (err) {
+        console.error("switchToAccount error:", err);
+        alert(err.message || "アカウントの切替に失敗しました。");
+      }
+    }
+  });
+
+  document.getElementById("add-account-btn")?.addEventListener("click", () => {
+    showPage(addAccountMenuPage);
+  });
+
+  document.getElementById("manage-hidden-accounts-btn")?.addEventListener("click", () => {
+    renderHiddenAccountList();
+    showPage(hiddenAccountsPage);
+  });
+
+  document.getElementById("hidden-account-list")?.addEventListener("click", async e => {
+    const btn = e.target.closest('[data-action="unhide"]');
+    if (!btn) return;
+    await setAccountHidden(btn.dataset.id, false);
+    renderHiddenAccountList();
+  });
+
+  // ============================
+  // アカウント追加(設定・アカウント切替の両方から使う共通画面)
+  // ============================
+  document.getElementById("menu-add-mnemonic")?.addEventListener("click", () => {
+    document.getElementById("add-mnemonic-index").value = nextMnemonicAccountIndex();
+    showPage(addAccountMnemonicPage);
+  });
+
+  document.getElementById("menu-add-privatekey")?.addEventListener("click", () => {
+    showPage(addAccountPrivatekeyPage);
+  });
+
+  document.getElementById("add-account-mnemonic-choice")?.addEventListener("click", () => {
+    document.getElementById("add-mnemonic-index").value = nextMnemonicAccountIndex();
+    showPage(addAccountMnemonicPage);
+  });
+
+  document.getElementById("add-account-privatekey-choice")?.addEventListener("click", () => {
+    showPage(addAccountPrivatekeyPage);
+  });
+
+  document.getElementById("add-mnemonic-submit")?.addEventListener("click", async () => {
+    const mnemonicPhrase = document.getElementById("add-mnemonic-input").value.trim();
+    const accountIndex = parseInt(document.getElementById("add-mnemonic-index").value, 10) || 0;
+    const label = document.getElementById("add-mnemonic-label").value;
+
+    if (!mnemonicPhrase) {
+      setStatus("add-mnemonic-status", "ニーモニックを入力してください。", "error");
+      return;
+    }
+
+    setStatus("add-mnemonic-status", "追加中...");
+    try {
+      await addAccountFromMnemonic(mnemonicPhrase, accountIndex, label);
+      document.getElementById("add-mnemonic-input").value = "";
+      document.getElementById("add-mnemonic-label").value = "";
+      updateSwitcherVisibility();
+      goHome();
+    } catch (e) {
+      console.error("addAccountFromMnemonic error:", e);
+      setStatus("add-mnemonic-status", e.message || "追加に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("add-privatekey-submit")?.addEventListener("click", async () => {
+    const privateKeyHex = document.getElementById("add-privatekey-input").value.trim();
+    const label = document.getElementById("add-privatekey-label").value;
+
+    if (!privateKeyHex) {
+      setStatus("add-privatekey-status", "秘密鍵を入力してください。", "error");
+      return;
+    }
+
+    setStatus("add-privatekey-status", "追加中...");
+    try {
+      await addAccountFromPrivateKey(privateKeyHex, label);
+      document.getElementById("add-privatekey-input").value = "";
+      document.getElementById("add-privatekey-label").value = "";
+      updateSwitcherVisibility();
+      goHome();
+    } catch (e) {
+      console.error("addAccountFromPrivateKey error:", e);
+      setStatus("add-privatekey-status", e.message || "追加に失敗しました。", "error");
+    }
+  });
+
+  // ============================
   // 戻る
   // ============================
   document.getElementById("back-account")?.addEventListener("click", () => showPage(accountPage));
@@ -345,6 +468,11 @@ window.addEventListener("load", async () => {
   document.getElementById("back-account-settings")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-settings-node")?.addEventListener("click", () => showPage(settingsPage));
   document.getElementById("back-settings-fee")?.addEventListener("click", () => showPage(settingsPage));
+  document.getElementById("back-account-switcher")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-hidden-accounts")?.addEventListener("click", () => showPage(accountSwitcherPage));
+  document.getElementById("back-add-account-menu")?.addEventListener("click", () => showPage(accountSwitcherPage));
+  document.getElementById("back-add-account-mnemonic")?.addEventListener("click", () => showPage(addAccountMenuPage));
+  document.getElementById("back-add-account-privatekey")?.addEventListener("click", () => showPage(addAccountMenuPage));
 
   // ============================
   // タブ切替
