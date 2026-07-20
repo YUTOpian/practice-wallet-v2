@@ -109,7 +109,10 @@
   <div id="account-page" class="page">
     <div class="card">
     <div class="card-title-row">
-      <h2>アカウント情報</h2>
+      <div class="title-with-switcher">
+        <h2>アカウント情報</h2>
+        <button id="account-switch-btn" class="chevron-btn" title="アカウント切替" style="display:none;">▼</button>
+      </div>
       <button id="settings-btn" class="settings-gear-btn" title="設定" aria-label="設定">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
@@ -266,6 +269,12 @@
         <button id="menu-fee-settings" class="settings-menu-item">
           送金手数料の設定
         </button>
+        <button id="menu-add-mnemonic" class="settings-menu-item">
+          📝 ニーモニックでアカウント追加
+        </button>
+        <button id="menu-add-privatekey" class="settings-menu-item">
+          🔑 秘密鍵でアカウント追加
+        </button>
         <button id="logout-btn" class="settings-menu-item">
           🚪 ログアウト
         </button>
@@ -332,6 +341,93 @@
 
       <button id="apply-fee-btn" class="button-primary">この設定を保存する</button>
       <div id="fee-settings-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       アカウント切替画面
+  ============================================================ -->
+  <div id="account-switcher-page" class="page">
+    <div class="card">
+      <h2>アカウント切替</h2>
+      <button id="back-account-switcher" class="button-primary">← 戻る</button>
+
+      <div id="account-switcher-list"></div>
+
+      <hr>
+
+      <button id="add-account-btn" class="button-primary">＋ アカウントを追加</button>
+      <button id="manage-hidden-accounts-btn" class="button-primary">非表示のアカウントを管理</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       非表示アカウント管理画面
+  ============================================================ -->
+  <div id="hidden-accounts-page" class="page">
+    <div class="card">
+      <h2>非表示のアカウント</h2>
+      <button id="back-hidden-accounts" class="button-primary">← 戻る</button>
+
+      <div id="hidden-account-list"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       アカウント追加方法選択画面
+  ============================================================ -->
+  <div id="add-account-menu-page" class="page">
+    <div class="card">
+      <h2>アカウントの追加</h2>
+      <button id="back-add-account-menu" class="button-primary">← 戻る</button>
+
+      <div class="settings-menu">
+        <button id="add-account-mnemonic-choice" class="settings-menu-item">
+          📝 ニーモニックで追加
+        </button>
+        <button id="add-account-privatekey-choice" class="settings-menu-item">
+          🔑 秘密鍵で追加
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ニーモニックでアカウント追加
+  ============================================================ -->
+  <div id="add-account-mnemonic-page" class="page">
+    <div class="card">
+      <h2>ニーモニックでアカウント追加</h2>
+      <button id="back-add-account-mnemonic" class="button-primary">← 戻る</button>
+
+      <textarea id="add-mnemonic-input" class="input-box" placeholder="単語をスペース区切りで入力"></textarea>
+
+      <p><b>アカウントインデックス：</b></p>
+      <input id="add-mnemonic-index" class="input-box" type="number" min="0" value="0">
+      <p style="font-size:13px;color:#94a3b8;">
+        同じニーモニックでも番号を変えると別のアカウントになります。未使用の番号が自動で入力されています。
+      </p>
+
+      <input id="add-mnemonic-label" class="input-box" placeholder="ラベル（任意）">
+
+      <button id="add-mnemonic-submit" class="button-primary">追加する</button>
+      <div id="add-mnemonic-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       秘密鍵でアカウント追加
+  ============================================================ -->
+  <div id="add-account-privatekey-page" class="page">
+    <div class="card">
+      <h2>秘密鍵でアカウント追加</h2>
+      <button id="back-add-account-privatekey" class="button-primary">← 戻る</button>
+
+      <input id="add-privatekey-input" class="input-box" placeholder="秘密鍵（64桁の16進数）">
+      <input id="add-privatekey-label" class="input-box" placeholder="ラベル（任意）">
+
+      <button id="add-privatekey-submit" class="button-primary">追加する</button>
+      <div id="add-privatekey-status"></div>
     </div>
   </div>
 
