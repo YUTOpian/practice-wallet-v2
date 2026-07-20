@@ -12,6 +12,14 @@ import { setText } from "./ui.js";
 
 const VAULT_KEY = "walletVault";
 
+// 現在ログインに使ったニーモニック(セッション中のみメモリ保持、保存はしない)
+// これがあれば「アカウント追加」時に毎回ニーモニックを打ち直さずに済む
+let currentMnemonicPhrase = null;
+
+export function hasCurrentMnemonic() {
+  return !!currentMnemonicPhrase;
+}
+
 /* ============================================================
    ニーモニック → 秘密鍵 (BIP39 + SLIP-10)
    @scure/bip39 と micro-ed25519-hdkey はどちらもNode.jsのBufferに
@@ -159,6 +167,7 @@ export async function connectWithSSS() {
 ============================================================ */
 export async function loginWithMnemonic(mnemonicPhrase, networkType, accountIndex = 0) {
   const privateKeyHex = await deriveFromMnemonic(mnemonicPhrase, accountIndex);
+  currentMnemonicPhrase = mnemonicPhrase;
 
   appState.networkType = networkType;
 
@@ -180,6 +189,7 @@ export async function loginWithMnemonic(mnemonicPhrase, networkType, accountInde
 ============================================================ */
 export async function addAccountFromMnemonic(mnemonicPhrase, accountIndex, label) {
   const privateKeyHex = await deriveFromMnemonic(mnemonicPhrase, accountIndex);
+  currentMnemonicPhrase = mnemonicPhrase;
 
   const id = crypto.randomUUID();
   const entry = {
@@ -193,6 +203,23 @@ export async function addAccountFromMnemonic(mnemonicPhrase, accountIndex, label
   upsertAccount(entry);
   await switchToAccount(id);
   return entry;
+}
+
+/* ============================================================
+   ニーモニックログイン中、既にメモリにあるニーモニックを使って
+   次のアカウントをワンクリックで追加する（再入力不要）
+============================================================ */
+export async function addNextAccountFromCurrentMnemonic(label) {
+  if (!currentMnemonicPhrase) {
+    throw new Error("ニーモニックがメモリ上にありません（ログインし直すか、秘密鍵で追加してください）");
+  }
+
+  const used = appState.accounts
+    .filter((a) => a.source === "mnemonic")
+    .map((a) => a.accountIndex ?? 0);
+  const nextIndex = used.length === 0 ? 0 : Math.max(...used) + 1;
+
+  return await addAccountFromMnemonic(currentMnemonicPhrase, nextIndex, label);
 }
 
 export async function addAccountFromPrivateKey(privateKeyHex, label) {
@@ -361,6 +388,7 @@ export function encryptMessageLocally(recipientPubKeyHex, plainText) {
 export function logout() {
   clearVault();
   closeWebSocket();
+  currentMnemonicPhrase = null;
 
   appState.authMode = null;
   appState.currentPubKey = null;
