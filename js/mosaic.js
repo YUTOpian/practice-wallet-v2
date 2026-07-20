@@ -39,9 +39,9 @@ async function fetchOwnedNamespaceOptions() {
 }
 
 /* ============================================================
-   保有モザイク一覧 + ネームスペースリンク状況
-   (account.js の appState.mosaicInfo をベースに、
-    まだ解決していないモザイクのエイリアス名を追加取得する)
+   自分が作成した(オーナーになっている)モザイク一覧 + ネームスペースリンク状況
+   保有量(mosaicInfo)ではなく、/mosaics?ownerAddress= で
+   「自分が定義者になっているモザイク」を取得する。
    リンクされていないモザイクには、その場でネームスペースを
    選んでリンクできる操作を表示する。
 ============================================================ */
@@ -52,12 +52,18 @@ export async function loadOwnedMosaicsWithAlias() {
   el.textContent = "読み込み中...";
 
   try {
-    const ids = Object.keys(appState.mosaicInfo || {});
+    const address = appState.currentAddress.toString();
+    const params = new URLSearchParams({ ownerAddress: address, pageSize: 100 });
+    const res = await fetch(`${appState.NODE}/mosaics?${params}`);
+    const json = await res.json();
+    const mosaicItems = json.data ?? [];
 
-    if (ids.length === 0) {
-      el.innerHTML = `<div style="color:#94a3b8;">保有しているモザイクはありません</div>`;
+    if (mosaicItems.length === 0) {
+      el.innerHTML = `<div style="color:#94a3b8;">作成したモザイクはありません</div>`;
       return;
     }
+
+    const ids = mosaicItems.map((item) => item.mosaic.id.toUpperCase());
 
     const [namesRes, namespaceOptions] = await Promise.all([
       fetch(`${appState.NODE}/namespaces/mosaic/names`, {
@@ -81,10 +87,20 @@ export async function loadOwnedMosaicsWithAlias() {
       .map((ns) => `<option value="${ns.id}">${ns.name}</option>`)
       .join("");
 
-    el.innerHTML = ids
-      .map((id) => {
-        const info = appState.mosaicInfo[id];
+    el.innerHTML = mosaicItems
+      .map((item) => {
+        const m = item.mosaic;
+        const id = m.id.toUpperCase();
         const alias = aliasMap[id];
+        const divisibility = Number(m.divisibility ?? 0);
+        const supply = m.supply != null ? formatMosaicAmount(m.supply, divisibility) : "---";
+
+        const flags = m.flags ?? 0;
+        const flagLabels = [];
+        if (flags & 0x1) flagLabels.push("supplyMutable");
+        if (flags & 0x2) flagLabels.push("transferable");
+        if (flags & 0x4) flagLabels.push("restrictable");
+        if (flags & 0x8) flagLabels.push("revokable");
 
         const linkControlHtml = alias
           ? ""
@@ -103,7 +119,9 @@ export async function loadOwnedMosaicsWithAlias() {
         return `
           <div class="harvest-history-item">
             <div>モザイクID: ${id}</div>
-            <div>数量: ${formatMosaicAmount(info.amount, info.divisibility)}</div>
+            <div>供給量: ${supply}</div>
+            <div>可分性: ${divisibility}</div>
+            <div>フラグ: ${flagLabels.length ? flagLabels.join(", ") : "なし"}</div>
             <div>${alias ? `🔗 ネームスペース: ${alias}` : "ネームスペースとのリンクなし"}</div>
             ${linkControlHtml}
           </div>
