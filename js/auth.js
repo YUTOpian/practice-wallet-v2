@@ -395,6 +395,49 @@ export function encryptMessageLocally(recipientPubKeyHex, plainText) {
 }
 
 /* ============================================================
+   署名 → アナウンス（共通処理）
+   SSS Extension / ローカル署名の両方に対応。
+   ネームスペース登録・モザイク作成など、送金・ハーベスト以外の
+   機能からも共通で使う。
+============================================================ */
+export async function signAndAnnounceTx(tx) {
+  let announceBody;
+  let signedBytes;
+
+  if (appState.authMode === "local") {
+    announceBody = signPayloadLocally(tx);
+    signedBytes = appState.sdkCore.utils.hexToUint8(JSON.parse(announceBody).payload);
+  } else {
+    const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
+
+    window.SSS.setTransactionByPayload(payload);
+    const signed = await window.SSS.requestSign();
+    if (!signed?.payload) {
+      throw new Error("SSS署名に失敗しました");
+    }
+
+    announceBody = JSON.stringify({ payload: signed.payload });
+    signedBytes = appState.sdkCore.utils.hexToUint8(signed.payload);
+  }
+
+  const res = await fetch(new URL("/transactions", appState.NODE), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: announceBody,
+  });
+
+  const result = await res.json();
+  console.log("announce result:", result);
+
+  if (!res.ok) {
+    throw new Error(result.message ?? "アナウンス失敗");
+  }
+
+  const signedTx = appState.facade.transactionFactory.static.deserialize(signedBytes);
+  return appState.facade.hashTransaction(signedTx).toString();
+}
+
+/* ============================================================
    ログアウト
    保存済みアカウント(パスワード付きボールト)も削除するため、
    次回は自動ログインできず、必ずSSS接続かニーモニック/秘密鍵の
