@@ -136,6 +136,7 @@
         <button id="receive-btn" class="button-primary">受け取り</button>
         <button id="send-btn" class="button-primary">送金</button>
         <button id="harvest-btn" class="button-primary">ステーキング</button>
+        <button id="advanced-btn" class="button-primary">高度機能</button>
       </div>
 
       <hr>
@@ -428,6 +429,104 @@
 
       <button id="add-privatekey-submit" class="button-primary">追加する</button>
       <div id="add-privatekey-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       高度機能メニュー
+  ============================================================ -->
+  <div id="advanced-page" class="page">
+    <div class="card">
+      <h2>高度機能</h2>
+      <button id="back-account-advanced" class="button-primary">← 戻る</button>
+
+      <div class="settings-menu">
+        <button id="menu-namespace" class="settings-menu-item">
+          🏷️ ネームスペースの登録
+        </button>
+        <button id="menu-mosaic" class="settings-menu-item">
+          🪙 モザイクの作成
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ネームスペース登録
+  ============================================================ -->
+  <div id="namespace-page" class="page">
+    <div class="card">
+      <h2>ネームスペースの登録</h2>
+      <button id="back-advanced-namespace" class="button-primary">← 戻る</button>
+
+      <h3>ルートネームスペースを作成</h3>
+      <input id="root-namespace-name" class="input-box" placeholder="ネームスペース名 (例: my_namespace)">
+      <input id="root-namespace-duration" class="input-box" type="number" min="1" placeholder="有効期間(ブロック数)　例: 86400(約30日目安)">
+      <button id="register-root-namespace-btn" class="button-primary">ルートネームスペースを登録</button>
+      <div id="root-namespace-status"></div>
+
+      <hr>
+
+      <h3>子ネームスペースを作成</h3>
+      <p style="font-size:13px;color:#94a3b8;">親は自分が保有するネームスペースから選択してください。</p>
+      <select id="child-namespace-parent-select" class="input-box">
+        <option value="">-- 読み込み中... --</option>
+      </select>
+      <input id="child-namespace-name" class="input-box" placeholder="子ネームスペース名">
+      <button id="register-child-namespace-btn" class="button-primary">子ネームスペースを登録</button>
+      <div id="child-namespace-status"></div>
+
+      <hr>
+
+      <h3>保有ネームスペース一覧</h3>
+      <div id="namespace-list">読み込み中...</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       モザイク作成
+  ============================================================ -->
+  <div id="mosaic-page" class="page">
+    <div class="card">
+      <h2>モザイクの作成</h2>
+      <button id="back-advanced-mosaic" class="button-primary">← 戻る</button>
+
+      <h3>新規モザイク作成</h3>
+
+      <p><b>可分性 (divisibility)：</b></p>
+      <input id="mosaic-divisibility" class="input-box" type="number" min="0" max="6" value="0">
+
+      <p><b>有効期間(ブロック数)：</b></p>
+      <input id="mosaic-duration" class="input-box" type="number" min="0" value="0" placeholder="0で無期限">
+
+      <p><b>初期供給量：</b></p>
+      <input id="mosaic-initial-supply" class="input-box" type="number" min="0" value="1000">
+
+      <label class="encrypt-option">
+        <input type="checkbox" id="mosaic-transferable" checked>
+        <span>第三者へ譲渡可能(transferable)</span>
+      </label>
+      <label class="encrypt-option">
+        <input type="checkbox" id="mosaic-supply-mutable">
+        <span>供給量変更可能(supplyMutable)</span>
+      </label>
+      <label class="encrypt-option">
+        <input type="checkbox" id="mosaic-restrictable">
+        <span>制限設定可能(restrictable)</span>
+      </label>
+
+      <p><b>ネームスペースとリンク（任意）：</b></p>
+      <select id="mosaic-link-namespace-select" class="input-box">
+        <option value="">-- リンクしない --</option>
+      </select>
+
+      <button id="create-mosaic-btn" class="button-primary">モザイクを作成する</button>
+      <div id="mosaic-create-status"></div>
+
+      <hr>
+
+      <h3>保有モザイク一覧</h3>
+      <div id="owned-mosaic-list">読み込み中...</div>
     </div>
   </div>
 
