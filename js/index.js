@@ -423,6 +423,8 @@ window.addEventListener("load", async () => {
       btn.textContent = "リンクする";
     }
   });
+
+  document.getElementById("create-mosaic-btn")?.addEventListener("click", async () => {
     const divisibility = parseInt(document.getElementById("mosaic-divisibility").value, 10) || 0;
     const durationBlocks = parseInt(document.getElementById("mosaic-duration").value, 10) || 0;
     const initialSupply = parseFloat(document.getElementById("mosaic-initial-supply").value) || 0;
