@@ -884,10 +884,17 @@ body {
   border: 1px solid #334155;
   border-radius: 12px;
   padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+
+.account-row:hover {
+  background: #1e3a8a;
+  border-color: #6366f1;
 }
 
 .account-row.active {
-  border-color: #4ade80;
+  background: #1e3a8a;
+  border-color: #6366f1;
 }
 
 .account-row-main {
