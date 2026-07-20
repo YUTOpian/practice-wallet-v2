@@ -36,6 +36,17 @@ import {
   renderHiddenAccountList,
   nextMnemonicAccountIndex,
 } from "./accountSwitcher.js";
+import {
+  loadOwnedNamespaces,
+  populateParentNamespaceSelect,
+  registerRootNamespace,
+  registerChildNamespace,
+} from "./namespace.js";
+import {
+  loadOwnedMosaicsWithAlias,
+  populateMosaicNamespaceSelect,
+  createMosaic,
+} from "./mosaic.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -61,6 +72,9 @@ window.addEventListener("load", async () => {
   const addAccountMenuPage = document.getElementById("add-account-menu-page");
   const addAccountMnemonicPage = document.getElementById("add-account-mnemonic-page");
   const addAccountPrivatekeyPage = document.getElementById("add-account-privatekey-page");
+  const advancedPage = document.getElementById("advanced-page");
+  const namespacePage = document.getElementById("namespace-page");
+  const mosaicPage = document.getElementById("mosaic-page");
 
   // ============================
   // ページ切替
@@ -311,6 +325,106 @@ window.addEventListener("load", async () => {
   document.getElementById("stop-harvest-btn")?.addEventListener("click", stopHarvest);
 
   // ============================
+  // 高度機能
+  // ============================
+  document.getElementById("advanced-btn")?.addEventListener("click", () => {
+    showPage(advancedPage);
+  });
+
+  document.getElementById("menu-namespace")?.addEventListener("click", async () => {
+    showPage(namespacePage);
+    await loadOwnedNamespaces();
+    await populateParentNamespaceSelect();
+  });
+
+  document.getElementById("menu-mosaic")?.addEventListener("click", async () => {
+    showPage(mosaicPage);
+    await loadOwnedMosaicsWithAlias();
+    await populateMosaicNamespaceSelect();
+  });
+
+  document.getElementById("register-root-namespace-btn")?.addEventListener("click", async () => {
+    const name = document.getElementById("root-namespace-name").value.trim();
+    const duration = parseInt(document.getElementById("root-namespace-duration").value, 10);
+
+    if (!name) {
+      setStatus("root-namespace-status", "ネームスペース名を入力してください。", "error");
+      return;
+    }
+    if (!Number.isInteger(duration) || duration <= 0) {
+      setStatus("root-namespace-status", "有効期間(ブロック数)を正しく入力してください。", "error");
+      return;
+    }
+
+    setStatus("root-namespace-status", "登録中...");
+    try {
+      const hash = await registerRootNamespace(name, duration);
+      setStatus("root-namespace-status", `✅ 登録リクエストを送信しました。Hash: ${hash}`, "success");
+      document.getElementById("root-namespace-name").value = "";
+      document.getElementById("root-namespace-duration").value = "";
+      await loadOwnedNamespaces();
+      await populateParentNamespaceSelect();
+    } catch (e) {
+      console.error("registerRootNamespace error:", e);
+      setStatus("root-namespace-status", e.message || "登録に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("register-child-namespace-btn")?.addEventListener("click", async () => {
+    const parentId = document.getElementById("child-namespace-parent-select").value;
+    const childName = document.getElementById("child-namespace-name").value.trim();
+
+    if (!parentId) {
+      setStatus("child-namespace-status", "親ネームスペースを選択してください。", "error");
+      return;
+    }
+    if (!childName) {
+      setStatus("child-namespace-status", "子ネームスペース名を入力してください。", "error");
+      return;
+    }
+
+    setStatus("child-namespace-status", "登録中...");
+    try {
+      const hash = await registerChildNamespace(parentId, childName);
+      setStatus("child-namespace-status", `✅ 登録リクエストを送信しました。Hash: ${hash}`, "success");
+      document.getElementById("child-namespace-name").value = "";
+      await loadOwnedNamespaces();
+      await populateParentNamespaceSelect();
+    } catch (e) {
+      console.error("registerChildNamespace error:", e);
+      setStatus("child-namespace-status", e.message || "登録に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("create-mosaic-btn")?.addEventListener("click", async () => {
+    const divisibility = parseInt(document.getElementById("mosaic-divisibility").value, 10) || 0;
+    const durationBlocks = parseInt(document.getElementById("mosaic-duration").value, 10) || 0;
+    const initialSupply = parseFloat(document.getElementById("mosaic-initial-supply").value) || 0;
+    const transferable = document.getElementById("mosaic-transferable").checked;
+    const supplyMutable = document.getElementById("mosaic-supply-mutable").checked;
+    const restrictable = document.getElementById("mosaic-restrictable").checked;
+    const linkNamespaceIdHex = document.getElementById("mosaic-link-namespace-select").value || null;
+
+    setStatus("mosaic-create-status", "作成中...");
+    try {
+      const hash = await createMosaic({
+        divisibility,
+        durationBlocks,
+        supplyMutable,
+        transferable,
+        restrictable,
+        initialSupply,
+        linkNamespaceIdHex,
+      });
+      setStatus("mosaic-create-status", `✅ 作成リクエストを送信しました。Hash: ${hash}`, "success");
+      await loadOwnedMosaicsWithAlias();
+    } catch (e) {
+      console.error("createMosaic error:", e);
+      setStatus("mosaic-create-status", e.message || "作成に失敗しました。", "error");
+    }
+  });
+
+  // ============================
   // 設定メニュー
   // ============================
   document.getElementById("settings-btn")?.addEventListener("click", () => {
@@ -490,6 +604,9 @@ window.addEventListener("load", async () => {
   document.getElementById("back-add-account-menu")?.addEventListener("click", () => showPage(accountSwitcherPage));
   document.getElementById("back-add-account-mnemonic")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-add-account-privatekey")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-account-advanced")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-advanced-namespace")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-advanced-mosaic")?.addEventListener("click", () => showPage(advancedPage));
 
   // ============================
   // タブ切替
