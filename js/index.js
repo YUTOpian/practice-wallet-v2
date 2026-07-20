@@ -27,6 +27,8 @@ import {
   setAccountHidden,
   addAccountFromMnemonic,
   addAccountFromPrivateKey,
+  addNextAccountFromCurrentMnemonic,
+  hasCurrentMnemonic,
 } from "./auth.js";
 import {
   updateSwitcherVisibility,
@@ -374,8 +376,23 @@ window.addEventListener("load", async () => {
     }
   });
 
-  document.getElementById("add-account-btn")?.addEventListener("click", () => {
-    showPage(addAccountMenuPage);
+  document.getElementById("add-account-btn")?.addEventListener("click", async () => {
+    if (hasCurrentMnemonic()) {
+      try {
+        await addNextAccountFromCurrentMnemonic();
+        updateSwitcherVisibility();
+        renderAccountSwitcherList();
+        showPage(accountSwitcherPage);
+      } catch (e) {
+        console.error("addNextAccountFromCurrentMnemonic error:", e);
+        alert(e.message || "アカウントの追加に失敗しました。");
+      }
+      return;
+    }
+
+    // ニーモニックがメモリ上にない場合(SSSのみ利用中など)は
+    // 秘密鍵の直接入力で追加する
+    showPage(addAccountPrivatekeyPage);
   });
 
   document.getElementById("manage-hidden-accounts-btn")?.addEventListener("click", () => {
@@ -471,8 +488,8 @@ window.addEventListener("load", async () => {
   document.getElementById("back-account-switcher")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-hidden-accounts")?.addEventListener("click", () => showPage(accountSwitcherPage));
   document.getElementById("back-add-account-menu")?.addEventListener("click", () => showPage(accountSwitcherPage));
-  document.getElementById("back-add-account-mnemonic")?.addEventListener("click", () => showPage(addAccountMenuPage));
-  document.getElementById("back-add-account-privatekey")?.addEventListener("click", () => showPage(addAccountMenuPage));
+  document.getElementById("back-add-account-mnemonic")?.addEventListener("click", () => showPage(accountPage));
+  document.getElementById("back-add-account-privatekey")?.addEventListener("click", () => showPage(accountPage));
 
   // ============================
   // タブ切替
