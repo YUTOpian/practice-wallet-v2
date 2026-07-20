@@ -196,78 +196,6 @@ body {
 }
 
 /* ============================================================
-   Txカード内 各要素の色分け（視認性向上）
-============================================================ */
-
-/* 送信/受信ラベル */
-.tx-title.tx-label-send {
-  color: #f87171; /* 赤 */
-}
-.tx-title.tx-label-receive {
-  color: #4ade80; /* 緑 */
-}
-
-/* 送金元・送金先 */
-.tx-address {
-  font-size: 13px;
-  margin-top: 6px;
-  line-height: 1.5;
-  word-break: break-all;
-}
-
-.tx-address-label {
-  display: inline-block;
-  color: #94a3b8; /* グレー */
-  margin-right: 6px;
-  font-weight: 600;
-}
-
-.tx-address-value {
-  color: #e5e7eb; /* 薄い白 */
-}
-
-/* モザイク(トークン)表示 */
-.tx-mosaic {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(255,255,255,0.04);
-  border-radius: 8px;
-  padding: 6px 10px;
-  margin-top: 8px;
-}
-
-.tx-mosaic-name {
-  color: #93c5fd; /* 水色 */
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.tx-mosaic-amount {
-  font-weight: bold;
-  font-size: 14px;
-}
-
-/* メッセージ */
-.tx-message {
-  margin-top: 8px;
-  font-size: 13px;
-  line-height: 1.5;
-  word-break: break-all;
-}
-
-.tx-message-label {
-  display: inline-block;
-  color: #94a3b8; /* グレー */
-  margin-right: 6px;
-  font-weight: 600;
-}
-
-.tx-message-value {
-  color: #fbbf24; /* 黄色系（メッセージを目立たせる） */
-}
-
-/* ============================================================
    UNCONFIRMED（未承認）／ カード強制ハイライト
 ============================================================ */
 .tx-item.unconfirmed {
@@ -285,18 +213,6 @@ body {
 }
 .tx-item.unconfirmed .tx-time {
   color: #7a6300 !important;
-}
-.tx-item.unconfirmed .tx-address-value,
-.tx-item.unconfirmed .tx-mosaic-name,
-.tx-item.unconfirmed .tx-message-value {
-  color: #6b5e00 !important;
-}
-.tx-item.unconfirmed .tx-address-label,
-.tx-item.unconfirmed .tx-message-label {
-  color: #7a6300 !important;
-}
-.tx-item.unconfirmed .tx-mosaic {
-  background: rgba(0,0,0,0.06);
 }
 
 /* 点滅アニメーション */
@@ -927,39 +843,81 @@ body {
 }
 
 /* ============================================================
-   ステーキング(ハーベスト)履歴
+   アカウント切替(チェブロン・一覧行)
 ============================================================ */
-#harvest-history {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.harvest-history-item {
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 12px;
-  padding: 12px 16px;
-  font-size: 14px;
-  color: #e5e7eb;
-  line-height: 1.6;
-}
-
-/* ============================================================
-   メッセージ暗号化チェック（送金画面）
-============================================================ */
-.encrypt-option {
+.title-with-switcher {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+}
+
+.chevron-btn {
+  background: transparent;
+  border: none;
   color: #cbd5e1;
-  margin: 4px 0 12px;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.chevron-btn:hover {
+  background: #334155;
+}
+
+#account-switcher-list,
+#hidden-account-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.account-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.account-row.active {
+  border-color: #4ade80;
+}
+
+.account-row-main {
+  flex: 1;
   cursor: pointer;
 }
 
-.encrypt-option input[type="checkbox"] {
-  width: auto;
-  margin: 0;
+.account-row-label {
+  font-weight: 600;
+  color: #fff;
+}
+
+.account-row-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.account-hide-btn {
+  background: #334155;
+  border: none;
+  color: #e5e7eb;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.account-hide-btn:hover {
+  background: #475569;
 }
