@@ -928,3 +928,18 @@ body {
 .account-hide-btn:hover {
   background: #475569;
 }
+
+/* ============================================================
+   モザイク→ネームスペース 後付けリンク
+============================================================ */
+.mosaic-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.mosaic-link-row .mosaic-link-select {
+  margin-bottom: 0;
+  flex: 1;
+}
