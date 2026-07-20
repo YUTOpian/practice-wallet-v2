@@ -46,6 +46,7 @@ import {
   loadOwnedMosaicsWithAlias,
   populateMosaicNamespaceSelect,
   createMosaic,
+  linkNamespaceToMosaic,
 } from "./mosaic.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
@@ -396,7 +397,32 @@ window.addEventListener("load", async () => {
     }
   });
 
-  document.getElementById("create-mosaic-btn")?.addEventListener("click", async () => {
+  document.getElementById("owned-mosaic-list")?.addEventListener("click", async e => {
+    const btn = e.target.closest('[data-action="link-mosaic"]');
+    if (!btn) return;
+
+    const mosaicId = btn.dataset.mosaicId;
+    const select = document.querySelector(`.mosaic-link-select[data-mosaic-id="${mosaicId}"]`);
+    const namespaceId = select?.value;
+
+    if (!namespaceId) {
+      alert("ネームスペースを選択してください。");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "リンク中...";
+    try {
+      await linkNamespaceToMosaic(mosaicId, namespaceId);
+      alert("✅ リンクリクエストを送信しました。");
+      await loadOwnedMosaicsWithAlias();
+    } catch (e) {
+      console.error("linkNamespaceToMosaic error:", e);
+      alert(e.message || "リンクに失敗しました。");
+      btn.disabled = false;
+      btn.textContent = "リンクする";
+    }
+  });
     const divisibility = parseInt(document.getElementById("mosaic-divisibility").value, 10) || 0;
     const durationBlocks = parseInt(document.getElementById("mosaic-duration").value, 10) || 0;
     const initialSupply = parseFloat(document.getElementById("mosaic-initial-supply").value) || 0;
