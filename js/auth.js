@@ -187,8 +187,19 @@ export async function loginWithMnemonic(mnemonicPhrase, networkType, accountInde
 /* ============================================================
    アカウント追加（ログイン済みの状態で使う。SSS利用中でも呼べる）
 ============================================================ */
+function isDuplicatePrivateKey(privateKeyHex) {
+  return appState.accounts.some(
+    (a) => a.privateKeyHex && a.privateKeyHex.toUpperCase() === privateKeyHex.toUpperCase()
+  );
+}
+
 export async function addAccountFromMnemonic(mnemonicPhrase, accountIndex, label) {
   const privateKeyHex = await deriveFromMnemonic(mnemonicPhrase, accountIndex);
+
+  if (isDuplicatePrivateKey(privateKeyHex)) {
+    throw new Error("このアカウントはすでにインポートされています");
+  }
+
   currentMnemonicPhrase = mnemonicPhrase;
 
   const id = crypto.randomUUID();
@@ -226,6 +237,10 @@ export async function addAccountFromPrivateKey(privateKeyHex, label) {
   const normalized = privateKeyHex.trim().toUpperCase().replace(/^0X/, "");
   if (!/^[0-9A-F]{64}$/.test(normalized)) {
     throw new Error("秘密鍵の形式が正しくありません（64桁の16進数を入力してください）");
+  }
+
+  if (isDuplicatePrivateKey(normalized)) {
+    throw new Error("このアカウントはすでにインポートされています");
   }
 
   const id = crypto.randomUUID();
