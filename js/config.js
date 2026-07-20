@@ -85,6 +85,14 @@ export const appState = {
   localPrivateKeyHex: null,
   localKeyPair: null,
 
+  // ========================================================
+  // アカウント一覧（マルチアカウント切替）
+  // ========================================================
+  // { id, label, source: "sss"|"mnemonic"|"privateKey", privateKeyHex?,
+  //   accountIndex?, address, hidden }
+  accounts: [],
+  activeAccountId: null,
+
   // Symbol SDK v3
   facade: null,
   sdkCore: null,
