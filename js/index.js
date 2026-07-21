@@ -570,6 +570,8 @@ window.addEventListener("load", async () => {
       btn.textContent = "署名する";
     }
   });
+
+  document.getElementById("register-root-namespace-btn")?.addEventListener("click", async () => {
     const name = document.getElementById("root-namespace-name").value.trim();
     const duration = parseInt(document.getElementById("root-namespace-duration").value, 10);
 
