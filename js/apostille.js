@@ -122,23 +122,47 @@ export async function searchApostilleTransactions(fileHashHex, targetAddress, { 
     pageSize,
   });
 
-  const res = await fetch(`${appState.NODE}/transactions/confirmed?${params}`);
+  const url = `${appState.NODE}/transactions/confirmed?${params}`;
+  const res = await fetch(url);
   const json = await res.json();
   const items = json.data ?? [];
 
+  console.log(`[apostille] search url=${url}`);
+  console.log(`[apostille] fetched ${items.length} item(s)`);
+
   const matches = [];
-  for (const item of items) {
-    const tx = item.transaction;
+
+  const tryMatch = (tx, meta) => {
     const cert = tryParseCert(tx.message);
+    console.log(`[apostille] tx type=${tx.type} message=${tx.message ?? "(none)"} parsedCert=`, cert);
     if (cert && cert.fileHash === fileHashHex) {
       matches.push({
-        hash: item.meta.hash,
-        height: item.meta.height,
-        timestamp: item.meta.timestamp,
+        hash: meta.hash,
+        height: meta.height,
+        timestamp: meta.timestamp,
         sender: tx.signerPublicKey,
         recipient: tx.recipientAddress,
         cert,
       });
+    }
+  };
+
+  for (const item of items) {
+    const tx = item.transaction;
+
+    // ケース1: embedded=true でトップレベルに展開されている場合
+    if (tx.message) {
+      tryMatch(tx, item.meta);
+    }
+
+    // ケース2: アグリゲート内に transactions[] としてネストされている場合
+    if (Array.isArray(tx.transactions)) {
+      for (const inner of tx.transactions) {
+        const innerTx = inner.transaction ?? inner;
+        if (innerTx.message) {
+          tryMatch(innerTx, item.meta);
+        }
+      }
     }
   }
 
