@@ -52,6 +52,14 @@ import {
   fetchOwnedMosaicIds,
 } from "./mosaic.js";
 import { setMetadata, loadOwnMetadataList } from "./metadata.js";
+import {
+  loadMultisigInfo,
+  fetchCosignatoryOfAddresses,
+  updateMultisigSettings,
+  sendFromMultisig,
+  loadPendingPartialTransactions,
+  cosignPending,
+} from "./multisig.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -81,6 +89,10 @@ window.addEventListener("load", async () => {
   const namespacePage = document.getElementById("namespace-page");
   const mosaicPage = document.getElementById("mosaic-page");
   const metadataPage = document.getElementById("metadata-page");
+  const multisigMenuPage = document.getElementById("multisig-menu-page");
+  const multisigSettingsPage = document.getElementById("multisig-settings-page");
+  const multisigSendPage = document.getElementById("multisig-send-page");
+  const multisigSignPage = document.getElementById("multisig-sign-page");
 
   // ============================
   // ページ切替
@@ -443,7 +455,121 @@ window.addEventListener("load", async () => {
     }
   });
 
-  document.getElementById("register-root-namespace-btn")?.addEventListener("click", async () => {
+  // ============================
+  // マルチシグ
+  // ============================
+  document.getElementById("menu-multisig")?.addEventListener("click", () => {
+    showPage(multisigMenuPage);
+  });
+
+  document.getElementById("menu-multisig-settings")?.addEventListener("click", async () => {
+    showPage(multisigSettingsPage);
+    await loadMultisigInfo();
+  });
+
+  document.getElementById("menu-multisig-send")?.addEventListener("click", async () => {
+    showPage(multisigSendPage);
+    const select = document.getElementById("multisig-send-from-select");
+    select.innerHTML = `<option value="">-- 読み込み中... --</option>`;
+    try {
+      const addresses = await fetchCosignatoryOfAddresses();
+      select.innerHTML = addresses.length
+        ? addresses.map(a => `<option value="${a}">${a}</option>`).join("")
+        : `<option value="">-- 連署者になっているマルチシグアカウントがありません --</option>`;
+    } catch (e) {
+      console.error("fetchCosignatoryOfAddresses error:", e);
+      select.innerHTML = `<option value="">-- 取得に失敗しました --</option>`;
+    }
+  });
+
+  document.getElementById("menu-multisig-sign")?.addEventListener("click", async () => {
+    showPage(multisigSignPage);
+    await loadPendingPartialTransactions();
+  });
+
+  document.getElementById("submit-multisig-settings-btn")?.addEventListener("click", async () => {
+    const additionAddresses = document
+      .getElementById("multisig-add-addresses").value
+      .split("\n").map(s => s.trim()).filter(Boolean);
+    const deletionAddresses = document
+      .getElementById("multisig-remove-addresses").value
+      .split("\n").map(s => s.trim()).filter(Boolean);
+    const minApprovalDelta = parseInt(document.getElementById("multisig-min-approval-delta").value, 10) || 0;
+    const minRemovalDelta = parseInt(document.getElementById("multisig-min-removal-delta").value, 10) || 0;
+
+    if (additionAddresses.length === 0 && deletionAddresses.length === 0 && minApprovalDelta === 0 && minRemovalDelta === 0) {
+      setStatus("multisig-settings-status", "変更内容を入力してください。", "error");
+      return;
+    }
+
+    setStatus("multisig-settings-status", "提案中...（ハッシュロックの承認待ちを含むため数十秒かかります）");
+    try {
+      const hash = await updateMultisigSettings({
+        minApprovalDelta,
+        minRemovalDelta,
+        additionAddresses,
+        deletionAddresses,
+      });
+      setStatus(
+        "multisig-settings-status",
+        `✅ 提案を送信しました。Hash: ${hash}\n追加した連署者は、それぞれ「マルチシグ署名」から承認してください。`,
+        "success"
+      );
+      document.getElementById("multisig-add-addresses").value = "";
+      document.getElementById("multisig-remove-addresses").value = "";
+    } catch (e) {
+      console.error("updateMultisigSettings error:", e);
+      setStatus("multisig-settings-status", e.message || "提案に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("submit-multisig-send-btn")?.addEventListener("click", async () => {
+    const multisigAddress = document.getElementById("multisig-send-from-select").value;
+    const recipientAddress = document.getElementById("multisig-send-recipient").value.trim();
+    const amountXym = parseFloat(document.getElementById("multisig-send-amount").value) || 0;
+    const message = document.getElementById("multisig-send-message").value;
+
+    if (!multisigAddress) {
+      setStatus("multisig-send-status", "送金元マルチシグアカウントを選択してください。", "error");
+      return;
+    }
+    if (!recipientAddress) {
+      setStatus("multisig-send-status", "宛先アドレスを入力してください。", "error");
+      return;
+    }
+
+    setStatus("multisig-send-status", "提案中...（ハッシュロックの承認待ちを含むため数十秒かかります）");
+    try {
+      const hash = await sendFromMultisig({ multisigAddress, recipientAddress, amountXym, message });
+      setStatus(
+        "multisig-send-status",
+        `✅ 送金を提案しました。Hash: ${hash}\n必要な承認数に応じて、他の連署者が「マルチシグ署名」から承認する必要があります。`,
+        "success"
+      );
+    } catch (e) {
+      console.error("sendFromMultisig error:", e);
+      setStatus("multisig-send-status", e.message || "提案に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("multisig-pending-list")?.addEventListener("click", async e => {
+    const btn = e.target.closest('[data-action="cosign"]');
+    if (!btn) return;
+
+    const hash = btn.dataset.hash;
+    btn.disabled = true;
+    btn.textContent = "署名中...";
+    try {
+      await cosignPending(hash);
+      alert("✅ 連署を送信しました。");
+      await loadPendingPartialTransactions();
+    } catch (e) {
+      console.error("cosignPending error:", e);
+      alert(e.message || "連署に失敗しました。");
+      btn.disabled = false;
+      btn.textContent = "署名する";
+    }
+  });
     const name = document.getElementById("root-namespace-name").value.trim();
     const duration = parseInt(document.getElementById("root-namespace-duration").value, 10);
 
@@ -735,6 +861,10 @@ window.addEventListener("load", async () => {
   document.getElementById("back-advanced-namespace")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-advanced-mosaic")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-advanced-metadata")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-advanced-multisig-menu")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-multisig-menu-settings")?.addEventListener("click", () => showPage(multisigMenuPage));
+  document.getElementById("back-multisig-menu-send")?.addEventListener("click", () => showPage(multisigMenuPage));
+  document.getElementById("back-multisig-menu-sign")?.addEventListener("click", () => showPage(multisigMenuPage));
 
   // ============================
   // タブ切替
