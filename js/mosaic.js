@@ -14,7 +14,7 @@ import { signAndAnnounceTx } from "./auth.js";
 /* ============================================================
    保有ネームスペース候補の取得 (共通)
 ============================================================ */
-async function fetchOwnedNamespaceOptions() {
+export async function fetchOwnedNamespaceOptions() {
   const address = appState.currentAddress.toString();
   const params = new URLSearchParams({ ownerAddress: address, pageSize: 100 });
   const res = await fetch(`${appState.NODE}/namespaces?${params}`);
@@ -36,6 +36,14 @@ async function fetchOwnedNamespaceOptions() {
   }
 
   return ids.map((id) => ({ id, name: nameMap[id] ?? id }));
+}
+
+export async function fetchOwnedMosaicIds() {
+  const address = appState.currentAddress.toString();
+  const params = new URLSearchParams({ ownerAddress: address, pageSize: 100 });
+  const res = await fetch(`${appState.NODE}/mosaics?${params}`);
+  const json = await res.json();
+  return (json.data ?? []).map((item) => item.mosaic.id.toUpperCase());
 }
 
 /* ============================================================
