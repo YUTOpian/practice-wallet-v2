@@ -73,8 +73,9 @@
     <div class="card">
       <h2>パスワードの設定（任意）</h2>
       <p style="font-size:13px;color:#94a3b8;">
-        パスワードを設定すると、次回からニーモニックの再入力なしにパスワードだけでログインできます。
-        設定しない場合、次回ログイン時は再度ニーモニックの入力が必要です。
+        パスワードを設定すると、暗号化してこの端末に保存され、次回はパスワード入力でログインできます。
+        設定しない場合も、ログアウトするまではこの端末に保存され、次回リロード時は確認なしでそのままログインした状態になります
+        （ただし暗号化されないため、端末を共有している場合はパスワード設定をおすすめします）。
       </p>
 
       <input id="setup-password-input" class="input-box" type="password" placeholder="パスワード（8文字以上推奨）">
@@ -93,13 +94,20 @@
     <div class="card">
       <h2>ログイン</h2>
       <p style="font-size:13px;color:#94a3b8;">
-        保存済みのアカウントがあります。パスワードを入力してください。
+        以前このアプリでパスワードを設定してアカウントを保存しています。そのパスワードを入力してください。
       </p>
 
       <input id="unlock-password-input" class="input-box" type="password" placeholder="パスワード">
       <button id="unlock-btn" class="button-primary">ログイン</button>
-      <button id="forget-account-btn" class="button-primary">別のアカウントでログインする</button>
       <div id="unlock-status"></div>
+
+      <hr>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        パスワードを設定した覚えがない、または忘れてしまった場合は、この端末に保存されたデータを削除して
+        SSS接続かニーモニックの入力からやり直せます（ニーモニックさえ分かっていれば、資産がなくなることはありません）。
+      </p>
+      <button id="forget-account-btn" class="button-primary">保存データを削除してやり直す</button>
     </div>
   </div>
 
@@ -447,6 +455,9 @@
         <button id="menu-mosaic" class="settings-menu-item">
           🪙 モザイクの作成
         </button>
+        <button id="menu-metadata" class="settings-menu-item">
+          🗂️ メタデータ
+        </button>
       </div>
     </div>
   </div>
@@ -456,7 +467,7 @@
   ============================================================ -->
   <div id="namespace-page" class="page">
     <div class="card">
-      <h2>ネームスペース</h2>
+      <h2>ネームスペースの登録</h2>
       <button id="back-advanced-namespace" class="button-primary">← 戻る</button>
 
       <h3>ルートネームスペースを作成</h3>
@@ -488,7 +499,7 @@
   ============================================================ -->
   <div id="mosaic-page" class="page">
     <div class="card">
-      <h2>モザイク</h2>
+      <h2>モザイクの作成</h2>
       <button id="back-advanced-mosaic" class="button-primary">← 戻る</button>
 
       <h3>新規モザイク作成</h3>
@@ -525,8 +536,58 @@
 
       <hr>
 
-      <h3>作成したモザイク一覧</h3>
+      <h3>保有モザイク一覧</h3>
       <div id="owned-mosaic-list">読み込み中...</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       メタデータ登録/更新
+  ============================================================ -->
+  <div id="metadata-page" class="page">
+    <div class="card">
+      <h2>メタデータ</h2>
+      <button id="back-advanced-metadata" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        自分自身が対象(アドレス／自分が保有するネームスペース／自分が保有するモザイク)にのみ登録できます。
+        既存のキーと同じ組み合わせで登録すると更新になります。
+      </p>
+
+      <p><b>対象の種類：</b></p>
+      <select id="metadata-target-type" class="input-box">
+        <option value="address">アドレス（自分自身）</option>
+        <option value="namespace">ネームスペース</option>
+        <option value="mosaic">モザイク</option>
+      </select>
+
+      <div id="metadata-target-namespace-row" style="display:none;">
+        <p><b>対象ネームスペース：</b></p>
+        <select id="metadata-target-namespace-select" class="input-box">
+          <option value="">-- 読み込み中... --</option>
+        </select>
+      </div>
+
+      <div id="metadata-target-mosaic-row" style="display:none;">
+        <p><b>対象モザイク：</b></p>
+        <select id="metadata-target-mosaic-select" class="input-box">
+          <option value="">-- 読み込み中... --</option>
+        </select>
+      </div>
+
+      <p><b>メタデータキー：</b></p>
+      <input id="metadata-key-input" class="input-box" placeholder="キー（例: profile）">
+
+      <p><b>値：</b></p>
+      <textarea id="metadata-value-input" class="input-box" placeholder="値"></textarea>
+
+      <button id="submit-metadata-btn" class="button-primary">登録・更新する</button>
+      <div id="metadata-status"></div>
+
+      <hr>
+
+      <h3>自分に紐づくメタデータ一覧</h3>
+      <div id="metadata-list">読み込み中...</div>
     </div>
   </div>
 
