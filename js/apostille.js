@@ -150,6 +150,12 @@ export async function searchApostilleTransactions(fileHashHex, targetAddress, { 
   for (const item of items) {
     const tx = item.transaction;
 
+    // デバッグ用: 全アイテムのtypeと、アグリゲート系typeの場合は生の中身を出力
+    console.log(`[apostille] item type=${tx.type} keys=${Object.keys(tx).join(",")}`);
+    if (tx.type === 16705 || tx.type === 16961 || tx.type === "16705" || tx.type === "16961") {
+      console.log("[apostille] aggregate raw item:", JSON.parse(JSON.stringify(item)));
+    }
+
     // ケース1: embedded=true でトップレベルに展開されている場合
     if (tx.message) {
       tryMatch(tx, item.meta);
