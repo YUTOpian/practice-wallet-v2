@@ -60,6 +60,7 @@ import {
   loadPendingPartialTransactions,
   cosignPending,
 } from "./multisig.js";
+import { parseCsv, sendMultiTransfer } from "./multisend.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -93,6 +94,9 @@ window.addEventListener("load", async () => {
   const multisigSettingsPage = document.getElementById("multisig-settings-page");
   const multisigSendPage = document.getElementById("multisig-send-page");
   const multisigSignPage = document.getElementById("multisig-sign-page");
+  const multisendMenuPage = document.getElementById("multisend-menu-page");
+  const multisendCsvPage = document.getElementById("multisend-csv-page");
+  const multisendListPage = document.getElementById("multisend-list-page");
 
   // ============================
   // ページ切替
@@ -571,6 +575,106 @@ window.addEventListener("load", async () => {
     }
   });
 
+  // ============================
+  // 複数送信
+  // ============================
+  function renderMultisendRow(data = { address: "", mosaic: "", amount: "", message: "" }) {
+    const container = document.getElementById("multisend-rows");
+    const row = document.createElement("div");
+    row.className = "multisend-row";
+    row.innerHTML = `
+      <input class="input-box ms-address" placeholder="送金先アドレス" value="${data.address}">
+      <input class="input-box ms-mosaic" placeholder="mosaic (例: symbol.xym)" value="${data.mosaic}">
+      <input class="input-box ms-amount" type="number" min="0" step="any" placeholder="数量" value="${data.amount}">
+      <input class="input-box ms-message" placeholder="メッセージ" value="${data.message}">
+      <button class="account-hide-btn" data-action="remove-row">削除</button>
+    `;
+    container.appendChild(row);
+  }
+
+  function clearMultisendRows() {
+    document.getElementById("multisend-rows").innerHTML = "";
+  }
+
+  function readMultisendRows() {
+    return Array.from(document.querySelectorAll(".multisend-row")).map(row => ({
+      address: row.querySelector(".ms-address").value,
+      mosaic: row.querySelector(".ms-mosaic").value,
+      amount: row.querySelector(".ms-amount").value,
+      message: row.querySelector(".ms-message").value,
+    }));
+  }
+
+  document.getElementById("menu-multisend")?.addEventListener("click", () => {
+    showPage(multisendMenuPage);
+  });
+
+  document.getElementById("menu-multisend-manual")?.addEventListener("click", () => {
+    clearMultisendRows();
+    renderMultisendRow();
+    setStatus("multisend-status", "", "default");
+    showPage(multisendListPage);
+  });
+
+  document.getElementById("menu-multisend-csv")?.addEventListener("click", () => {
+    document.getElementById("multisend-csv-file").value = "";
+    setStatus("multisend-csv-status", "", "default");
+    showPage(multisendCsvPage);
+  });
+
+  document.getElementById("multisend-csv-file")?.addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+
+      if (rows.length === 0) {
+        setStatus("multisend-csv-status", "CSVから送金先を読み取れませんでした。", "error");
+        return;
+      }
+
+      clearMultisendRows();
+      rows.forEach(r => renderMultisendRow(r));
+      setStatus("multisend-status", `CSVから${rows.length}件読み込みました。内容を確認してください。`, "success");
+      showPage(multisendListPage);
+    } catch (err) {
+      console.error("CSV parse error:", err);
+      setStatus("multisend-csv-status", "CSVの読み込みに失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("multisend-add-row-btn")?.addEventListener("click", () => {
+    renderMultisendRow();
+  });
+
+  document.getElementById("multisend-rows")?.addEventListener("click", e => {
+    const btn = e.target.closest('[data-action="remove-row"]');
+    if (!btn) return;
+    btn.closest(".multisend-row")?.remove();
+  });
+
+  document.getElementById("multisend-submit-btn")?.addEventListener("click", async () => {
+    const rows = readMultisendRows();
+
+    if (rows.length === 0) {
+      setStatus("multisend-status", "送金先を1件以上入力してください。", "error");
+      return;
+    }
+
+    if (!confirm(`${rows.length}件の送金を1つのトランザクションとして送信します。よろしいですか？`)) return;
+
+    setStatus("multisend-status", "送信中...");
+    try {
+      const hash = await sendMultiTransfer(rows);
+      setStatus("multisend-status", `✅ 送信しました。Hash: ${hash}`, "success");
+    } catch (e) {
+      console.error("sendMultiTransfer error:", e);
+      setStatus("multisend-status", e.message || "送信に失敗しました。", "error");
+    }
+  });
+
   document.getElementById("register-root-namespace-btn")?.addEventListener("click", async () => {
     const name = document.getElementById("root-namespace-name").value.trim();
     const duration = parseInt(document.getElementById("root-namespace-duration").value, 10);
@@ -867,6 +971,9 @@ window.addEventListener("load", async () => {
   document.getElementById("back-multisig-menu-settings")?.addEventListener("click", () => showPage(multisigMenuPage));
   document.getElementById("back-multisig-menu-send")?.addEventListener("click", () => showPage(multisigMenuPage));
   document.getElementById("back-multisig-menu-sign")?.addEventListener("click", () => showPage(multisigMenuPage));
+  document.getElementById("back-advanced-multisend-menu")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-multisend-menu-csv")?.addEventListener("click", () => showPage(multisendMenuPage));
+  document.getElementById("back-multisend-menu-list")?.addEventListener("click", () => showPage(multisendMenuPage));
 
   // ============================
   // タブ切替
