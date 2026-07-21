@@ -61,6 +61,7 @@ import {
   cosignPending,
 } from "./multisig.js";
 import { parseCsv, sendMultiTransfer } from "./multisend.js";
+import { computeFileHash, createApostille, searchApostilleTransactions } from "./apostille.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -97,6 +98,10 @@ window.addEventListener("load", async () => {
   const multisendMenuPage = document.getElementById("multisend-menu-page");
   const multisendCsvPage = document.getElementById("multisend-csv-page");
   const multisendListPage = document.getElementById("multisend-list-page");
+  const apostilleMenuPage = document.getElementById("apostille-menu-page");
+  const apostilleCreatePage = document.getElementById("apostille-create-page");
+  const apostilleVerifyPage = document.getElementById("apostille-verify-page");
+  const apostilleHistoryPage = document.getElementById("apostille-history-page");
 
   // ============================
   // ページ切替
@@ -646,6 +651,10 @@ window.addEventListener("load", async () => {
   });
 
   document.getElementById("multisend-add-row-btn")?.addEventListener("click", () => {
+    if (document.querySelectorAll(".multisend-row").length >= 100) {
+      alert("登録できる送金先は最大100件です。");
+      return;
+    }
     renderMultisendRow();
   });
 
@@ -672,6 +681,165 @@ window.addEventListener("load", async () => {
     } catch (e) {
       console.error("sendMultiTransfer error:", e);
       setStatus("multisend-status", e.message || "送信に失敗しました。", "error");
+    }
+  });
+
+  // ============================
+  // アポスティーユ
+  // ============================
+  document.getElementById("menu-apostille")?.addEventListener("click", () => {
+    showPage(apostilleMenuPage);
+  });
+
+  document.getElementById("menu-apostille-create")?.addEventListener("click", () => {
+    document.getElementById("apostille-create-file").value = "";
+    document.getElementById("apostille-create-hash").textContent = "";
+    document.getElementById("apostille-owner-address").value = "";
+    document.getElementById("apostille-metadata-key").value = "";
+    document.getElementById("apostille-metadata-value").value = "";
+    setStatus("apostille-create-status", "", "default");
+    showPage(apostilleCreatePage);
+  });
+
+  document.getElementById("menu-apostille-verify")?.addEventListener("click", () => {
+    document.getElementById("apostille-verify-file").value = "";
+    document.getElementById("apostille-verify-hash").textContent = "";
+    document.getElementById("apostille-verify-result").innerHTML = "";
+    setStatus("apostille-verify-status", "", "default");
+    showPage(apostilleVerifyPage);
+  });
+
+  document.getElementById("menu-apostille-history")?.addEventListener("click", () => {
+    document.getElementById("apostille-history-file").value = "";
+    document.getElementById("apostille-history-hash").textContent = "";
+    document.getElementById("apostille-history-list").innerHTML = "";
+    setStatus("apostille-history-status", "", "default");
+    showPage(apostilleHistoryPage);
+  });
+
+  let apostilleCreateHash = null;
+  document.getElementById("apostille-create-file")?.addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    document.getElementById("apostille-create-hash").textContent = "ハッシュ計算中...";
+    apostilleCreateHash = await computeFileHash(file);
+    document.getElementById("apostille-create-hash").textContent = `SHA-256: ${apostilleCreateHash}`;
+  });
+
+  document.getElementById("apostille-create-btn")?.addEventListener("click", async () => {
+    const file = document.getElementById("apostille-create-file").files?.[0];
+    if (!file || !apostilleCreateHash) {
+      setStatus("apostille-create-status", "ファイルを選択してください。", "error");
+      return;
+    }
+
+    const ownerAddress = document.getElementById("apostille-owner-address").value.trim();
+    const metadataKey = document.getElementById("apostille-metadata-key").value.trim();
+    const metadataValue = document.getElementById("apostille-metadata-value").value.trim();
+
+    setStatus("apostille-create-status", "作成中...");
+    try {
+      const hash = await createApostille({
+        file,
+        fileHashHex: apostilleCreateHash,
+        ownerAddress,
+        metadataKey,
+        metadataValue,
+      });
+      setStatus("apostille-create-status", `✅ 作成しました。Hash: ${hash}`, "success");
+    } catch (e) {
+      console.error("createApostille error:", e);
+      setStatus("apostille-create-status", e.message || "作成に失敗しました。", "error");
+    }
+  });
+
+  let apostilleVerifyHash = null;
+  document.getElementById("apostille-verify-file")?.addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    document.getElementById("apostille-verify-hash").textContent = "ハッシュ計算中...";
+    apostilleVerifyHash = await computeFileHash(file);
+    document.getElementById("apostille-verify-hash").textContent = `SHA-256: ${apostilleVerifyHash}`;
+  });
+
+  document.getElementById("apostille-verify-btn")?.addEventListener("click", async () => {
+    if (!apostilleVerifyHash) {
+      setStatus("apostille-verify-status", "ファイルを選択してください。", "error");
+      return;
+    }
+
+    const address = document.getElementById("apostille-verify-address").value.trim();
+    const resultEl = document.getElementById("apostille-verify-result");
+    resultEl.innerHTML = "";
+
+    setStatus("apostille-verify-status", "検索中...");
+    try {
+      const matches = await searchApostilleTransactions(apostilleVerifyHash, address);
+      if (matches.length === 0) {
+        setStatus("apostille-verify-status", "❌ 一致する証明が見つかりませんでした（直近の取引のみ検索対象です）。", "error");
+        return;
+      }
+
+      setStatus("apostille-verify-status", `✅ ${matches.length}件の証明が見つかりました。`, "success");
+      resultEl.innerHTML = matches
+        .map(m => `
+          <div class="harvest-history-item">
+            <div>Hash: ${m.hash}</div>
+            <div>高さ: ${m.height}</div>
+            <div>ファイル名: ${m.cert.fileName || "---"}</div>
+            <div>所有者: ${m.cert.owner}</div>
+            <div>記録日時(証明書内): ${m.cert.timestamp}</div>
+          </div>
+        `)
+        .join("");
+    } catch (e) {
+      console.error("searchApostilleTransactions error:", e);
+      setStatus("apostille-verify-status", "検索に失敗しました。", "error");
+    }
+  });
+
+  let apostilleHistoryHash = null;
+  document.getElementById("apostille-history-file")?.addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    document.getElementById("apostille-history-hash").textContent = "ハッシュ計算中...";
+    apostilleHistoryHash = await computeFileHash(file);
+    document.getElementById("apostille-history-hash").textContent = `SHA-256: ${apostilleHistoryHash}`;
+  });
+
+  document.getElementById("apostille-history-btn")?.addEventListener("click", async () => {
+    if (!apostilleHistoryHash) {
+      setStatus("apostille-history-status", "ファイルを選択してください。", "error");
+      return;
+    }
+
+    const address = document.getElementById("apostille-history-address").value.trim();
+    const listEl = document.getElementById("apostille-history-list");
+    listEl.innerHTML = "";
+
+    setStatus("apostille-history-status", "検索中...");
+    try {
+      const matches = await searchApostilleTransactions(apostilleHistoryHash, address);
+      if (matches.length === 0) {
+        setStatus("apostille-history-status", "この証明の履歴は見つかりませんでした（直近の取引のみ検索対象です）。", "error");
+        return;
+      }
+
+      setStatus("apostille-history-status", `${matches.length}件の履歴が見つかりました（古い順）。`, "success");
+      listEl.innerHTML = matches
+        .map((m, i) => `
+          <div class="harvest-history-item">
+            <div>#${i + 1}</div>
+            <div>Hash: ${m.hash}</div>
+            <div>高さ: ${m.height}</div>
+            <div>所有者: ${m.cert.owner}</div>
+            <div>記録日時(証明書内): ${m.cert.timestamp}</div>
+          </div>
+        `)
+        .join("");
+    } catch (e) {
+      console.error("searchApostilleTransactions error(history):", e);
+      setStatus("apostille-history-status", "検索に失敗しました。", "error");
     }
   });
 
@@ -974,6 +1142,10 @@ window.addEventListener("load", async () => {
   document.getElementById("back-advanced-multisend-menu")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-multisend-menu-csv")?.addEventListener("click", () => showPage(multisendMenuPage));
   document.getElementById("back-multisend-menu-list")?.addEventListener("click", () => showPage(multisendMenuPage));
+  document.getElementById("back-advanced-apostille-menu")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-apostille-menu-create")?.addEventListener("click", () => showPage(apostilleMenuPage));
+  document.getElementById("back-apostille-menu-verify")?.addEventListener("click", () => showPage(apostilleMenuPage));
+  document.getElementById("back-apostille-menu-history")?.addEventListener("click", () => showPage(apostilleMenuPage));
 
   // ============================
   // タブ切替
