@@ -943,3 +943,38 @@ body {
   margin-bottom: 0;
   flex: 1;
 }
+
+/* ============================================================
+   複数送信リスト
+============================================================ */
+#multisend-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.multisend-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 0.7fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.multisend-row input {
+  margin-bottom: 0;
+}
+
+.multisend-row .account-hide-btn {
+  padding: 8px 10px;
+}
+
+@media (max-width: 768px) {
+  .multisend-row {
+    grid-template-columns: 1fr;
+  }
+}
