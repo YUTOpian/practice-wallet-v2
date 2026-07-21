@@ -467,13 +467,17 @@ export function encryptMessageLocally(recipientPubKeyHex, plainText) {
    ネームスペース登録・モザイク作成など、送金・ハーベスト以外の
    機能からも共通で使う。
 ============================================================ */
-export async function signAndAnnounceTx(tx) {
-  let announceBody;
+/* ============================================================
+   署名のみ行い、アナウンスはしない(マルチシグのアグリゲートボンデッド等、
+   ハッシュロックを挟む多段階フローで使う)
+============================================================ */
+export async function signTxOnly(tx) {
+  let jsonPayload;
   let signedBytes;
 
   if (appState.authMode === "local") {
-    announceBody = signPayloadLocally(tx);
-    signedBytes = appState.sdkCore.utils.hexToUint8(JSON.parse(announceBody).payload);
+    jsonPayload = signPayloadLocally(tx);
+    signedBytes = appState.sdkCore.utils.hexToUint8(JSON.parse(jsonPayload).payload);
   } else {
     const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
 
@@ -483,9 +487,21 @@ export async function signAndAnnounceTx(tx) {
       throw new Error("SSS署名に失敗しました");
     }
 
-    announceBody = JSON.stringify({ payload: signed.payload });
+    jsonPayload = JSON.stringify({ payload: signed.payload });
     signedBytes = appState.sdkCore.utils.hexToUint8(signed.payload);
   }
+
+  return { jsonPayload, signedBytes };
+}
+
+/* ============================================================
+   署名 → アナウンス（共通処理）
+   SSS Extension / ローカル署名の両方に対応。
+   ネームスペース登録・モザイク作成など、送金・ハーベスト以外の
+   機能からも共通で使う。
+============================================================ */
+export async function signAndAnnounceTx(tx) {
+  const { jsonPayload: announceBody, signedBytes } = await signTxOnly(tx);
 
   const res = await fetch(new URL("/transactions", appState.NODE), {
     method: "PUT",
@@ -525,4 +541,26 @@ export function logout() {
   appState.networkType = null;
   appState.accounts = [];
   appState.activeAccountId = null;
+}
+
+/* ============================================================
+   保留中のアグリゲートボンデッドTxへの連署(マルチシグ署名)
+   Symbol の連署は「トランザクションハッシュへの署名」のみで完結する。
+   ※ SSS Extensionにはハッシュへの署名を依頼する公開APIが無いため、
+     現状はローカル署名(ニーモニック/秘密鍵ログイン)のみ対応。
+============================================================ */
+export function cosignTransactionHash(transactionHashHex) {
+  if (appState.authMode !== "local") {
+    throw new Error("SSS Extensionでは連署に対応していません（ニーモニック/秘密鍵ログインでご利用ください）");
+  }
+
+  const hashBytes = appState.sdkCore.utils.hexToUint8(transactionHashHex);
+  const signature = appState.localKeyPair.sign(hashBytes);
+
+  return {
+    parentHash: transactionHashHex,
+    signature: appState.sdkCore.utils.uint8ToHex(signature.bytes ?? signature),
+    signerPublicKey: appState.currentPubKey,
+    version: "0",
+  };
 }
