@@ -41,35 +41,31 @@ function parseCsvLine(line) {
   return cells.map((c) => c.trim());
 }
 
+/* ============================================================
+   CSVパース
+   列構成(ヘッダー行なし・固定位置):
+     A列: ラベル(任意・未使用、Excel上でのメモ用)
+     B列: 送金先アドレス または ネームスペース名
+     C列: 送金数量
+     D列: モザイクID(16進) または ネームスペース名(省略時はXYM)
+     E列: メッセージ(任意)
+   最大100件まで。
+============================================================ */
 export function parseCsv(text) {
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length === 0) return [];
 
-  const header = parseCsvLine(lines[0]).map((h) => h.toLowerCase());
-  const idxAddress = header.indexOf("address");
-  const idxMosaic = header.indexOf("mosaic");
-  const idxAmount = header.indexOf("amount");
-  const idxMessage = header.indexOf("message");
+  if (lines.length > 100) {
+    throw new Error("CSVに登録できる送金先は最大100件です。");
+  }
 
-  const hasHeader = idxAddress !== -1 && idxMosaic !== -1 && idxAmount !== -1;
-  const dataLines = hasHeader ? lines.slice(1) : lines;
-
-  return dataLines.map((line) => {
+  return lines.map((line) => {
     const cells = parseCsvLine(line);
-    if (hasHeader) {
-      return {
-        address: cells[idxAddress] ?? "",
-        mosaic: cells[idxMosaic] ?? "",
-        amount: cells[idxAmount] ?? "",
-        message: idxMessage !== -1 ? cells[idxMessage] ?? "" : "",
-      };
-    }
-    // ヘッダーが無い場合は列順(address,mosaic,amount,message)とみなす
     return {
-      address: cells[0] ?? "",
-      mosaic: cells[1] ?? "",
+      address: cells[1] ?? "",
       amount: cells[2] ?? "",
-      message: cells[3] ?? "",
+      mosaic: cells[3]?.trim() ? cells[3] : "symbol.xym",
+      message: cells[4] ?? "",
     };
   });
 }
