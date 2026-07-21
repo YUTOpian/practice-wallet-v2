@@ -18,7 +18,8 @@ import {
 import {
   connectWithSSS,
   loginWithMnemonic,
-  hasVault,
+  getVaultMode,
+  restorePlainVault,
   unlockVault,
   saveVault,
   clearVault,
@@ -47,7 +48,10 @@ import {
   populateMosaicNamespaceSelect,
   createMosaic,
   linkNamespaceToMosaic,
+  fetchOwnedNamespaceOptions,
+  fetchOwnedMosaicIds,
 } from "./mosaic.js";
+import { setMetadata, loadOwnMetadataList } from "./metadata.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -76,6 +80,7 @@ window.addEventListener("load", async () => {
   const advancedPage = document.getElementById("advanced-page");
   const namespacePage = document.getElementById("namespace-page");
   const mosaicPage = document.getElementById("mosaic-page");
+  const metadataPage = document.getElementById("metadata-page");
 
   // ============================
   // ページ切替
@@ -94,11 +99,21 @@ window.addEventListener("load", async () => {
 
   // ============================
   // 起動時の初期画面判定
-  // 保存済みアカウント(パスワード設定済み)があればロック解除画面、
-  // なければログイン方法選択画面を表示する
+  // - パスワード設定済み(暗号化保存) → ロック解除画面
+  // - パスワード未設定だが保存あり(平文保存) → 確認なしでそのまま自動ログイン
+  // - 何も保存されていない → ログイン方法選択画面
   // ============================
-  if (hasVault()) {
+  const vaultMode = getVaultMode();
+  if (vaultMode === "encrypted") {
     showPage(unlockPage);
+  } else if (vaultMode === "plain") {
+    try {
+      await restorePlainVault();
+      goHome();
+    } catch (e) {
+      console.error("restorePlainVault error:", e);
+      showPage(welcomePage);
+    }
   } else {
     showPage(welcomePage);
   }
@@ -202,7 +217,11 @@ window.addEventListener("load", async () => {
   });
 
   document.getElementById("forget-account-btn")?.addEventListener("click", () => {
-    if (!confirm("保存済みのアカウント情報をこの端末から削除します。よろしいですか？")) return;
+    if (!confirm(
+      "この端末に保存されているアカウント情報を削除します。\n" +
+      "（ニーモニックや秘密鍵をメモ・保管していれば、資産自体がなくなることはありません。このアプリからのログイン情報が消えるだけです）\n\n" +
+      "削除してよろしいですか？"
+    )) return;
     clearVault();
     showPage(welcomePage);
   });
@@ -342,6 +361,86 @@ window.addEventListener("load", async () => {
     showPage(mosaicPage);
     await loadOwnedMosaicsWithAlias();
     await populateMosaicNamespaceSelect();
+  });
+
+  // ============================
+  // メタデータ
+  // ============================
+  document.getElementById("menu-metadata")?.addEventListener("click", async () => {
+    showPage(metadataPage);
+    await loadOwnMetadataList();
+  });
+
+  const metadataTargetType = document.getElementById("metadata-target-type");
+  const metadataNamespaceRow = document.getElementById("metadata-target-namespace-row");
+  const metadataMosaicRow = document.getElementById("metadata-target-mosaic-row");
+
+  async function refreshMetadataTargetRows() {
+    const type = metadataTargetType.value;
+    metadataNamespaceRow.style.display = type === "namespace" ? "block" : "none";
+    metadataMosaicRow.style.display = type === "mosaic" ? "block" : "none";
+
+    if (type === "namespace") {
+      const select = document.getElementById("metadata-target-namespace-select");
+      select.innerHTML = `<option value="">-- 読み込み中... --</option>`;
+      try {
+        const options = await fetchOwnedNamespaceOptions();
+        select.innerHTML = options.length
+          ? options.map(ns => `<option value="${ns.id}">${ns.name}</option>`).join("")
+          : `<option value="">-- 保有ネームスペースがありません --</option>`;
+      } catch {
+        select.innerHTML = `<option value="">-- 取得に失敗しました --</option>`;
+      }
+    } else if (type === "mosaic") {
+      const select = document.getElementById("metadata-target-mosaic-select");
+      select.innerHTML = `<option value="">-- 読み込み中... --</option>`;
+      try {
+        const ids = await fetchOwnedMosaicIds();
+        select.innerHTML = ids.length
+          ? ids.map(id => `<option value="${id}">${id}</option>`).join("")
+          : `<option value="">-- 作成したモザイクがありません --</option>`;
+      } catch {
+        select.innerHTML = `<option value="">-- 取得に失敗しました --</option>`;
+      }
+    }
+  }
+
+  metadataTargetType?.addEventListener("change", refreshMetadataTargetRows);
+
+  document.getElementById("submit-metadata-btn")?.addEventListener("click", async () => {
+    const type = metadataTargetType.value;
+    const key = document.getElementById("metadata-key-input").value.trim();
+    const value = document.getElementById("metadata-value-input").value;
+
+    if (!key) {
+      setStatus("metadata-status", "メタデータキーを入力してください。", "error");
+      return;
+    }
+
+    let targetId = null;
+    if (type === "namespace") {
+      targetId = document.getElementById("metadata-target-namespace-select").value;
+      if (!targetId) {
+        setStatus("metadata-status", "対象のネームスペースを選択してください。", "error");
+        return;
+      }
+    } else if (type === "mosaic") {
+      targetId = document.getElementById("metadata-target-mosaic-select").value;
+      if (!targetId) {
+        setStatus("metadata-status", "対象のモザイクを選択してください。", "error");
+        return;
+      }
+    }
+
+    setStatus("metadata-status", "登録・更新中...");
+    try {
+      const hash = await setMetadata(type, targetId, key, value);
+      setStatus("metadata-status", `✅ リクエストを送信しました。Hash: ${hash}`, "success");
+      await loadOwnMetadataList();
+    } catch (e) {
+      console.error("setMetadata error:", e);
+      setStatus("metadata-status", e.message || "登録・更新に失敗しました。", "error");
+    }
   });
 
   document.getElementById("register-root-namespace-btn")?.addEventListener("click", async () => {
@@ -635,6 +734,7 @@ window.addEventListener("load", async () => {
   document.getElementById("back-account-advanced")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-advanced-namespace")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-advanced-mosaic")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-advanced-metadata")?.addEventListener("click", () => showPage(advancedPage));
 
   // ============================
   // タブ切替
