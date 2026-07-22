@@ -152,6 +152,61 @@ export async function switchToAccount(id) {
 }
 
 /* ============================================================
+   ネットワーク切り替え(Mainnet ⇔ Testnet)
+   SSS Extension接続アカウントでは使えない(SSSの署名対象ネットワークは
+   拡張機能側で固定されているため)。ローカル署名(ニーモニック/秘密鍵)
+   のアカウントのみ対応。同じ秘密鍵でも、ネットワークが変わると
+   アドレスの見え方(先頭の"N"/"T"等)が変わる。
+============================================================ */
+export async function switchNetwork(networkType) {
+  if (appState.authMode === "sss") {
+    throw new Error("SSS Extension接続アカウントではネットワークを切り替えられません");
+  }
+  if (!appState.localPrivateKeyHex) {
+    throw new Error("アカウントが未接続です");
+  }
+  if (appState.networkType === networkType) {
+    return; // 既に同じネットワーク
+  }
+
+  closeWebSocket();
+
+  appState.networkType = networkType;
+  const isTestnet = networkType === NetworkType.TESTNET;
+  appState.NODE = await selectNode(isTestnet);
+  await initSdk();
+
+  const keyPair = new appState.facade.static.KeyPair(
+    new appState.sdkCore.PrivateKey(appState.localPrivateKeyHex)
+  );
+  appState.localKeyPair = keyPair;
+  appState.currentPubKey = keyPair.publicKey.toString();
+  appState.currentAddress = appState.facade.network.publicKeyToAddress(keyPair.publicKey);
+
+  // 他アカウントのキャッシュ済みアドレスは別ネットワークのものになって
+  // しまうため無効化する(次に切り替えた時に再計算される)
+  appState.accounts.forEach((a) => {
+    if (a.source !== "sss") delete a.address;
+  });
+
+  const activeAcc = appState.accounts.find((a) => a.id === appState.activeAccountId);
+  if (activeAcc) activeAcc.address = appState.currentAddress.toString();
+
+  setText("network-label", isTestnet ? "Testnet" : "Mainnet");
+  const addressEl = document.getElementById("account-address");
+  if (addressEl) addressEl.textContent = appState.currentAddress.toString();
+
+  await refreshAccount();
+  await loadRecentTx();
+
+  const address2 = appState.currentAddress.toString();
+  initWebSocket(address2);
+  initLiveTx(address2);
+
+  await persistAccounts();
+}
+
+/* ============================================================
    SSS Extension 接続
 ============================================================ */
 export async function connectWithSSS() {
