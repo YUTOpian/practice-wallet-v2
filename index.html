@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Symbol Simple Wallet</title>
-  <link rel="stylesheet" href="css/base.css" />
-  <link rel="stylesheet" href="css/wallet.css" />
+  <title>NEM Simple Wallet</title>
+  <link rel="stylesheet" href="css/base.css?v=2" />
+  <link rel="stylesheet" href="css/wallet.css?v=2" />
 </head>
 <body>
 
 <header>
-  <h2>Symbol Simple Wallet</h2>
+  <h2>NEM Simple Wallet</h2>
   <div class="header-info">
     <p><span id="node-info">---</span></p>
   </div>
@@ -29,46 +29,12 @@
       </p>
 
       <div class="settings-menu">
-        <button id="choose-create-new" class="settings-menu-item">
-          🆕 新規作成
-        </button>
         <button id="choose-mnemonic" class="settings-menu-item">
           📝 ニーモニックをインポートする
-        </button>
-        <button id="choose-sss" class="settings-menu-item">
-          🧩 SSS Extensionと接続する
         </button>
       </div>
 
       <div id="welcome-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       新規作成画面
-  ============================================================ -->
-  <div id="create-new-page" class="page">
-    <div class="card">
-      <h2>新規作成</h2>
-      <button id="back-welcome-create-new" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        以下のニーモニックフレーズが、あなたの新しいアカウントの鍵になります。
-        <b>紙に書き写すなどして、必ず安全な場所に記録してください。</b>
-        このフレーズを失うとアカウントに二度とアクセスできなくなり、
-        他人に知られるとアカウントの資産を自由に操作されてしまいます。
-      </p>
-
-      <div id="create-new-mnemonic" class="input-box" style="word-break:break-all; user-select: text;">生成中...</div>
-
-      <p><b>ネットワーク：</b></p>
-      <select id="create-new-network-select" class="input-box">
-        <option value="mainnet">Mainnet</option>
-        <option value="testnet">Testnet</option>
-      </select>
-
-      <button id="create-new-next-btn" class="button-primary">次に進む</button>
-      <div id="create-new-status"></div>
     </div>
   </div>
 
@@ -102,16 +68,18 @@
   ============================================================ -->
   <div id="password-setup-page" class="page">
     <div class="card">
-      <h2>パスワードの設定</h2>
+      <h2>パスワードの設定（任意）</h2>
       <p style="font-size:13px;color:#94a3b8;">
-        ニーモニックでログインしたアカウントは、必ずパスワードを設定して暗号化保存します。
-        次回はこのパスワードを入力してログインできます。
+        パスワードを設定すると、暗号化してこの端末に保存され、次回はパスワード入力でログインできます。
+        設定しない場合も、ログアウトするまではこの端末に保存され、次回リロード時は確認なしでそのままログインした状態になります
+        （ただし暗号化されないため、端末を共有している場合はパスワード設定をおすすめします）。
       </p>
 
-      <input id="setup-password-input" class="input-box" type="password" placeholder="パスワード（8文字以上）">
+      <input id="setup-password-input" class="input-box" type="password" placeholder="パスワード（8文字以上推奨）">
       <input id="setup-password-confirm" class="input-box" type="password" placeholder="パスワード（確認）">
 
       <button id="save-password-btn" class="button-primary">パスワードを設定して保存する</button>
+      <button id="skip-password-btn" class="button-primary">設定しない（このまま進む）</button>
       <div id="password-setup-status"></div>
     </div>
   </div>
@@ -133,15 +101,8 @@
       <hr>
 
       <p style="font-size:13px;color:#94a3b8;">
-        SSS Extensionを利用して、外部ウォレットから接続できます。
-      </p>
-      <button id="unlock-sss-btn" class="button-primary">🧩 SSS Extensionと接続する</button>
-
-      <hr>
-
-      <p style="font-size:13px;color:#94a3b8;">
         パスワードを設定した覚えがない、または忘れてしまった場合は、この端末に保存されたデータを削除して
-        SSS接続かニーモニックの入力からやり直せます（ニーモニックさえ分かっていれば、資産がなくなることはありません）。
+        ニーモニックの入力からやり直せます（ニーモニックさえ分かっていれば、資産がなくなることはありません）。
       </p>
       <button id="forget-account-btn" class="button-primary">保存データを削除してやり直す</button>
     </div>
@@ -288,7 +249,7 @@
       <select id="harvest-node-select" class="input-box">
         <option value="">-- 候補を読み込み中... --</option>
       </select>
-      <input id="harvest-node-input" class="input-box" placeholder="または直接ノードURLを入力 (例: https://xxx.xxx.jp:3001)">
+      <input id="harvest-node-input" class="input-box" placeholder="または直接ノードURLを入力 (HTTPS対応ノードのみ, 例: https://xxx.xxx.jp:7891)">
 
       <hr>
 
@@ -314,17 +275,11 @@
         <button id="menu-fee-settings" class="settings-menu-item">
           送金手数料の設定
         </button>
-        <button id="menu-network-switch" class="settings-menu-item" style="display:none;">
-          🌐 ネットワーク切り替え
-        </button>
         <button id="menu-add-mnemonic" class="settings-menu-item">
           📝 ニーモニックでアカウント追加
         </button>
         <button id="menu-add-privatekey" class="settings-menu-item">
           🔑 秘密鍵でアカウント追加
-        </button>
-        <button id="lock-session-btn" class="settings-menu-item" style="display:none;">
-          🔒 ログイン画面に戻る
         </button>
         <button id="logout-btn" class="settings-menu-item">
           🚪 ログアウト
@@ -344,13 +299,19 @@
       <p><b>現在のノード：</b></p>
       <div id="current-node-display" class="address-text">---</div>
 
+      <p style="font-size:13px;color:#94a3b8;">
+        ⚠️ このアプリはHTTPS対応ノードにのみ接続できます(http://のノードは指定できません)。
+        HTTPS対応ノードは <a href="https://nemnodes.org/nodes" target="_blank" rel="noopener" style="color:#8ab4f8;">nemnodes.org</a>
+        の一覧で「https」リンクが載っているものを参考にしてください。
+      </p>
+
       <hr>
 
       <h3>ノード候補</h3>
       <select id="node-settings-select" class="input-box">
         <option value="">-- 候補を読み込み中... --</option>
       </select>
-      <input id="node-settings-input" class="input-box" placeholder="または直接ノードURLを入力 (例: https://xxx.xxx.jp:3001)">
+      <input id="node-settings-input" class="input-box" placeholder="または直接ノードURLを入力 (例: https://xxx.xxx.jp:7891)">
 
       <button id="apply-node-btn" class="button-primary">このノードに接続する</button>
       <div id="node-settings-status"></div>
@@ -366,8 +327,8 @@
       <button id="back-settings-fee" class="button-primary">← 戻る</button>
 
       <p style="font-size:13px;color:#94a3b8;">
-        ネットワークの直近の手数料状況をもとにした目安です。タップすると下の入力欄に反映されます。
-        実際に使われる値は下の「feeMultiplier」欄の数値です。
+        NEM(NIS1)には手数料スケジュールを取得するAPIが無いため、ここでは
+        「基準手数料の何倍を払うか」という倍率で指定します。タップすると下の入力欄に反映されます。
       </p>
 
       <div id="fee-options">
@@ -387,36 +348,11 @@
 
       <hr>
 
-      <p><b>feeMultiplier（実際に送金時に使う値）：</b></p>
-      <input id="fee-custom-input" class="input-box" type="number" min="0" placeholder="例: 100">
+      <p><b>手数料倍率（実際に送金時に使う値）：</b></p>
+      <input id="fee-custom-input" class="input-box" type="number" min="0" step="0.1" placeholder="例: 1">
 
       <button id="apply-fee-btn" class="button-primary">この設定を保存する</button>
       <div id="fee-settings-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       ネットワーク切り替え画面
-  ============================================================ -->
-  <div id="network-switch-page" class="page">
-    <div class="card">
-      <h2>ネットワーク切り替え</h2>
-      <button id="back-settings-network" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        現在: <span id="network-switch-current">---</span>
-      </p>
-
-      <div class="settings-menu">
-        <button id="network-switch-mainnet" class="settings-menu-item">
-          🟢 Mainnet に切り替える
-        </button>
-        <button id="network-switch-testnet" class="settings-menu-item">
-          🟡 Testnet に切り替える
-        </button>
-      </div>
-
-      <div id="network-switch-status"></div>
     </div>
   </div>
 
@@ -517,25 +453,13 @@
 
       <div class="settings-menu">
         <button id="menu-namespace" class="settings-menu-item">
-          🏷️ ネームスペース
+          🏷️ ネームスペースの登録
         </button>
         <button id="menu-mosaic" class="settings-menu-item">
-          🪙 モザイク
-        </button>
-        <button id="menu-metadata" class="settings-menu-item">
-          🗂️ メタデータ
+          🪙 モザイクの作成
         </button>
         <button id="menu-multisig" class="settings-menu-item">
           👥 マルチシグ
-        </button>
-        <button id="menu-multisend" class="settings-menu-item">
-          📤 複数送信
-        </button>
-        <button id="menu-apostille" class="settings-menu-item">
-          📜 アポスティーユ
-        </button>
-        <button id="menu-restriction" class="settings-menu-item">
-          🚧 制限機能
         </button>
       </div>
     </div>
@@ -546,12 +470,14 @@
   ============================================================ -->
   <div id="namespace-page" class="page">
     <div class="card">
-      <h2>ネームスペース</h2>
+      <h2>ネームスペースの登録</h2>
       <button id="back-advanced-namespace" class="button-primary">← 戻る</button>
 
       <h3>ルートネームスペースを作成</h3>
+      <p style="font-size:13px;color:#94a3b8;">
+        NEMのネームスペースは有効期間を指定できません(ネットワーク規定の期間で取得され、レンタル料がXEMで徴収されます)。
+      </p>
       <input id="root-namespace-name" class="input-box" placeholder="ネームスペース名 (例: my_namespace)">
-      <input id="root-namespace-duration" class="input-box" type="number" min="1" placeholder="有効期間(ブロック数)　例: 86400(約30日目安)">
       <button id="register-root-namespace-btn" class="button-primary">ルートネームスペースを登録</button>
       <div id="root-namespace-status"></div>
 
@@ -578,16 +504,29 @@
   ============================================================ -->
   <div id="mosaic-page" class="page">
     <div class="card">
-      <h2>モザイク</h2>
+      <h2>モザイクの作成</h2>
       <button id="back-advanced-mosaic" class="button-primary">← 戻る</button>
 
       <h3>新規モザイク作成</h3>
 
+      <p style="font-size:13px;color:#94a3b8;">
+        NEMのモザイクは、必ず自分が保有するネームスペースの下に作成されます
+        (namespace:mosaicName の形。後から別のネームスペースへ付け替えることはできません)。
+      </p>
+
+      <p><b>作成先ネームスペース：</b></p>
+      <select id="mosaic-link-namespace-select" class="input-box">
+        <option value="">-- 読み込み中... --</option>
+      </select>
+
+      <p><b>モザイク名：</b></p>
+      <input id="mosaic-name-input" class="input-box" placeholder="例: coupon">
+
+      <p><b>説明文：</b></p>
+      <input id="mosaic-description-input" class="input-box" placeholder="例: my mosaic" maxlength="128">
+
       <p><b>可分性 (divisibility)：</b></p>
       <input id="mosaic-divisibility" class="input-box" type="number" min="0" max="6" value="0">
-
-      <p><b>有効期間(ブロック数)：</b></p>
-      <input id="mosaic-duration" class="input-box" type="number" min="0" value="0" placeholder="0で無期限">
 
       <p><b>初期供給量：</b></p>
       <input id="mosaic-initial-supply" class="input-box" type="number" min="0" value="1000">
@@ -600,15 +539,6 @@
         <input type="checkbox" id="mosaic-supply-mutable">
         <span>供給量変更可能(supplyMutable)</span>
       </label>
-      <label class="encrypt-option">
-        <input type="checkbox" id="mosaic-restrictable">
-        <span>制限設定可能(restrictable)</span>
-      </label>
-
-      <p><b>ネームスペースとリンク（任意）：</b></p>
-      <select id="mosaic-link-namespace-select" class="input-box">
-        <option value="">-- リンクしない --</option>
-      </select>
 
       <button id="create-mosaic-btn" class="button-primary">モザイクを作成する</button>
       <div id="mosaic-create-status"></div>
@@ -617,56 +547,6 @@
 
       <h3>保有モザイク一覧</h3>
       <div id="owned-mosaic-list">読み込み中...</div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       メタデータ登録/更新
-  ============================================================ -->
-  <div id="metadata-page" class="page">
-    <div class="card">
-      <h2>メタデータ</h2>
-      <button id="back-advanced-metadata" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        自分自身が対象(アドレス／自分が保有するネームスペース／自分が保有するモザイク)にのみ登録できます。
-        既存のキーと同じ組み合わせで登録すると更新になります。
-      </p>
-
-      <p><b>対象の種類：</b></p>
-      <select id="metadata-target-type" class="input-box">
-        <option value="address">アドレス（自分自身）</option>
-        <option value="namespace">ネームスペース</option>
-        <option value="mosaic">モザイク</option>
-      </select>
-
-      <div id="metadata-target-namespace-row" style="display:none;">
-        <p><b>対象ネームスペース：</b></p>
-        <select id="metadata-target-namespace-select" class="input-box">
-          <option value="">-- 読み込み中... --</option>
-        </select>
-      </div>
-
-      <div id="metadata-target-mosaic-row" style="display:none;">
-        <p><b>対象モザイク：</b></p>
-        <select id="metadata-target-mosaic-select" class="input-box">
-          <option value="">-- 読み込み中... --</option>
-        </select>
-      </div>
-
-      <p><b>メタデータキー：</b></p>
-      <input id="metadata-key-input" class="input-box" placeholder="キー（例: profile）">
-
-      <p><b>値：</b></p>
-      <textarea id="metadata-value-input" class="input-box" placeholder="値"></textarea>
-
-      <button id="submit-metadata-btn" class="button-primary">登録・更新する</button>
-      <div id="metadata-status"></div>
-
-      <hr>
-
-      <h3>自分に紐づくメタデータ一覧</h3>
-      <div id="metadata-list">読み込み中...</div>
     </div>
   </div>
 
@@ -701,9 +581,9 @@
       <button id="back-multisig-menu-settings" class="button-primary">← 戻る</button>
 
       <p style="font-size:13px;color:#94a3b8;">
-        設定対象は、今ログイン中のアカウント自身です。追加する連署者の同意（署名）が必要なため、
-        提案後は各連署者がそれぞれ「マルチシグ署名」画面から承認する必要があります
-        （提案時に10XYMのハッシュロック担保が一時的に必要です）。
+        設定対象は、今ログイン中のアカウント自身です。NEMのマルチシグ設定変更は
+        Symbolと異なり、他の連署者の事前同意は不要で、送信すると即座に反映されます
+        （追加する連署者は「アドレス」ではなく「公開鍵」で指定する必要がある点にご注意ください）。
       </p>
 
       <h3>現在の状態</h3>
@@ -713,17 +593,14 @@
 
       <h3>変更内容</h3>
 
-      <p><b>追加する連署者アドレス（1行に1つ）：</b></p>
-      <textarea id="multisig-add-addresses" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+      <p><b>追加する連署者の公開鍵（1行に1つ）：</b></p>
+      <textarea id="multisig-add-addresses" class="input-box" placeholder="64桁の16進数公開鍵"></textarea>
 
-      <p><b>削除する連署者アドレス（1行に1つ）：</b></p>
-      <textarea id="multisig-remove-addresses" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+      <p><b>削除する連署者の公開鍵（1行に1つ）：</b></p>
+      <textarea id="multisig-remove-addresses" class="input-box" placeholder="64桁の16進数公開鍵"></textarea>
 
       <p><b>最小承認者数の増減（minApprovalDelta）：</b></p>
       <input id="multisig-min-approval-delta" class="input-box" type="number" value="0">
-
-      <p><b>最小削除承認者数の増減（minRemovalDelta）：</b></p>
-      <input id="multisig-min-removal-delta" class="input-box" type="number" value="0">
 
       <button id="submit-multisig-settings-btn" class="button-primary">この内容で提案する</button>
       <div id="multisig-settings-status"></div>
@@ -740,8 +617,7 @@
 
       <p style="font-size:13px;color:#94a3b8;">
         自分が連署者になっているマルチシグアカウントから送金を提案します
-        （提案時に10XYMのハッシュロック担保が一時的に必要です。必要な承認数に応じて、
-        他の連署者が「マルチシグ署名」から承認するまで確定しません）。
+        （必要な承認数に応じて、他の連署者が「マルチシグ署名」から承認するまで確定しません）。
       </p>
 
       <p><b>送金元マルチシグアカウント：</b></p>
@@ -752,7 +628,7 @@
       <p><b>宛先アドレス：</b></p>
       <input id="multisig-send-recipient" class="input-box" placeholder="宛先アドレス">
 
-      <p><b>送金額（XYM）：</b></p>
+      <p><b>送金額（XEM）：</b></p>
       <input id="multisig-send-amount" class="input-box" type="number" min="0" step="any" value="0">
 
       <p><b>メッセージ（任意）：</b></p>
@@ -773,303 +649,15 @@
 
       <p style="font-size:13px;color:#94a3b8;">
         自分の連署が必要な、保留中のトランザクション一覧です。
-        ※ SSS Extensionログイン中は連署に対応していません（ニーモニック/秘密鍵ログインでご利用ください）。
       </p>
 
       <div id="multisig-pending-list">読み込み中...</div>
     </div>
   </div>
 
-  <!-- ============================================================
-       複数送信メニュー
-  ============================================================ -->
-  <div id="multisend-menu-page" class="page">
-    <div class="card">
-      <h2>複数送信</h2>
-      <button id="back-advanced-multisend-menu" class="button-primary">← 戻る</button>
-
-      <div class="settings-menu">
-        <button id="menu-multisend-manual" class="settings-menu-item">
-          ✏️ 手動設定
-        </button>
-        <button id="menu-multisend-csv" class="settings-menu-item">
-          📄 CSVインポート
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       複数送信 CSVインポート
-  ============================================================ -->
-  <div id="multisend-csv-page" class="page">
-    <div class="card">
-      <h2>CSVインポート</h2>
-      <button id="back-multisend-menu-csv" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        1行目はヘッダー行として「address,mosaic,amount,message」を想定しています。
-        mosaicはモザイクID(16進)、またはネームスペース名（例: symbol.xym）どちらでも入力できます。
-      </p>
-
-      <input id="multisend-csv-file" class="input-box" type="file" accept=".csv,text/csv">
-      <div id="multisend-csv-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       複数送信 一覧編集・送信画面(手動設定・CSVインポート共通)
-  ============================================================ -->
-  <div id="multisend-list-page" class="page">
-    <div class="card">
-      <h2>複数送信リスト</h2>
-      <button id="back-multisend-menu-list" class="button-primary">← 戻る</button>
-
-      <div id="multisend-rows"></div>
-
-      <button id="multisend-add-row-btn" class="button-primary">＋ 行を追加</button>
-      <button id="multisend-submit-btn" class="button-primary">この内容で送信する</button>
-      <div id="multisend-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       アポスティーユメニュー
-  ============================================================ -->
-  <div id="apostille-menu-page" class="page">
-    <div class="card">
-      <h2>アポスティーユ</h2>
-      <button id="back-advanced-apostille-menu" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        ファイルのハッシュ値をブロックチェーン上に記録して、存在証明・改ざん検知を行う機能です。
-      </p>
-
-      <div class="settings-menu">
-        <button id="menu-apostille-create" class="settings-menu-item">
-          🆕 作成
-        </button>
-        <button id="menu-apostille-verify" class="settings-menu-item">
-          🔍 監査・承認
-        </button>
-        <button id="menu-apostille-history" class="settings-menu-item">
-          🕒 履歴
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       アポスティーユ作成
-  ============================================================ -->
-  <div id="apostille-create-page" class="page">
-    <div class="card">
-      <h2>アポスティーユ作成</h2>
-      <button id="back-apostille-menu-create" class="button-primary">← 戻る</button>
-
-      <p><b>アポスティーユファイル選択：</b></p>
-      <input id="apostille-create-file" class="input-box" type="file">
-      <div id="apostille-create-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
-
-      <p><b>所有者(承認者)割り当て（任意）：</b></p>
-      <input id="apostille-owner-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
-
-      <p><b>メタデータ追加（任意）：</b></p>
-      <input id="apostille-metadata-key" class="input-box" placeholder="メタデータキー">
-      <input id="apostille-metadata-value" class="input-box" placeholder="値（空欄ならファイルハッシュを使用）">
-
-      <button id="apostille-create-btn" class="button-primary">アポスティーユ作成</button>
-      <div id="apostille-create-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       アポスティーユ 監査・承認
-  ============================================================ -->
-  <div id="apostille-verify-page" class="page">
-    <div class="card">
-      <h2>監査・承認</h2>
-      <button id="back-apostille-menu-verify" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        監査したいファイルをアップロードすると、対象アドレスの取引履歴から一致する証明トランザクションを検索します
-        （直近の取引のみが検索対象です）。
-      </p>
-
-      <p><b>監査するファイル：</b></p>
-      <input id="apostille-verify-file" class="input-box" type="file">
-      <div id="apostille-verify-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
-
-      <p><b>検索対象アドレス（任意）：</b></p>
-      <input id="apostille-verify-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
-
-      <button id="apostille-verify-btn" class="button-primary">検証する</button>
-      <div id="apostille-verify-status"></div>
-      <div id="apostille-verify-result"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       アポスティーユ 履歴
-  ============================================================ -->
-  <div id="apostille-history-page" class="page">
-    <div class="card">
-      <h2>履歴</h2>
-      <button id="back-apostille-menu-history" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        ファイルをアップロードすると、そのファイル(ハッシュ)に関する証明トランザクションの変遷を古い順に表示します。
-      </p>
-
-      <p><b>ファイル：</b></p>
-      <input id="apostille-history-file" class="input-box" type="file">
-      <div id="apostille-history-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
-
-      <p><b>検索対象アドレス（任意）：</b></p>
-      <input id="apostille-history-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
-
-      <button id="apostille-history-btn" class="button-primary">履歴を検索</button>
-      <div id="apostille-history-status"></div>
-      <div id="apostille-history-list"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       制限機能メニュー
-  ============================================================ -->
-  <div id="restriction-menu-page" class="page">
-    <div class="card">
-      <h2>制限機能</h2>
-      <button id="back-advanced-restriction-menu" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        いずれも今ログイン中のアカウント自身に対する制限です。自分の署名だけで設定できます。
-      </p>
-
-      <div class="settings-menu">
-        <button id="menu-restriction-address" class="settings-menu-item">
-          🧑 アカウント制限
-        </button>
-        <button id="menu-restriction-mosaic" class="settings-menu-item">
-          🪙 モザイク制限
-        </button>
-        <button id="menu-restriction-operation" class="settings-menu-item">
-          📄 トランザクション制限
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       アカウント制限(アドレス)
-  ============================================================ -->
-  <div id="restriction-address-page" class="page">
-    <div class="card">
-      <h2>アカウント制限（アドレス）</h2>
-      <button id="back-restriction-menu-address" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        指定したアドレスからの受信、または指定したアドレスへの送信を許可／ブロックします。
-      </p>
-
-      <h3>現在の設定</h3>
-      <div id="restriction-current-address">読み込み中...</div>
-
-      <hr>
-
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-address-block">
-        <span>ブロックリストにする（未チェックなら許可リスト）</span>
-      </label>
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-address-outgoing">
-        <span>送信(自分発)に適用する（未チェックなら受信に適用）</span>
-      </label>
-
-      <p><b>追加するアドレス（1行に1つ）：</b></p>
-      <textarea id="restriction-address-add" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
-
-      <p><b>削除するアドレス（1行に1つ）：</b></p>
-      <textarea id="restriction-address-remove" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
-
-      <button id="restriction-address-submit" class="button-primary">この内容で設定する</button>
-      <div id="restriction-address-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       モザイク制限
-  ============================================================ -->
-  <div id="restriction-mosaic-page" class="page">
-    <div class="card">
-      <h2>モザイク制限</h2>
-      <button id="back-restriction-menu-mosaic" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        指定したモザイクの受信、または送信を許可／ブロックします。
-      </p>
-
-      <h3>現在の設定</h3>
-      <div id="restriction-current-mosaic">読み込み中...</div>
-
-      <hr>
-
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-mosaic-block">
-        <span>ブロックリストにする（未チェックなら許可リスト）</span>
-      </label>
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-mosaic-outgoing">
-        <span>送信(自分発)に適用する（未チェックなら受信に適用）</span>
-      </label>
-
-      <p><b>追加するモザイクID（1行に1つ、16進）：</b></p>
-      <textarea id="restriction-mosaic-add" class="input-box" placeholder="例: 72C0212E67A08BCE"></textarea>
-
-      <p><b>削除するモザイクID（1行に1つ、16進）：</b></p>
-      <textarea id="restriction-mosaic-remove" class="input-box" placeholder="例: 72C0212E67A08BCE"></textarea>
-
-      <button id="restriction-mosaic-submit" class="button-primary">この内容で設定する</button>
-      <div id="restriction-mosaic-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       トランザクション制限(操作)
-  ============================================================ -->
-  <div id="restriction-operation-page" class="page">
-    <div class="card">
-      <h2>トランザクション制限</h2>
-      <button id="back-restriction-menu-operation" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        指定した種類のトランザクションの送信を許可／ブロックします（受信方向には適用できません）。
-      </p>
-
-      <h3>現在の設定</h3>
-      <div id="restriction-current-operation">読み込み中...</div>
-
-      <hr>
-
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-operation-block">
-        <span>ブロックリストにする（未チェックなら許可リスト）</span>
-      </label>
-
-      <p><b>追加する種類：</b></p>
-      <select id="restriction-operation-add" class="input-box" multiple size="6"></select>
-
-      <p><b>削除する種類：</b></p>
-      <select id="restriction-operation-remove" class="input-box" multiple size="6"></select>
-
-      <button id="restriction-operation-submit" class="button-primary">この内容で設定する</button>
-      <div id="restriction-operation-status"></div>
-    </div>
-  </div>
-
 </div>
 
-<script type="module" src="js/index.js"></script>
+<script src="js/bundle.js?v=2"></script>
 
 </body>
 </html>
