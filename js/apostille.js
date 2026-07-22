@@ -127,14 +127,10 @@ export async function searchApostilleTransactions(fileHashHex, targetAddress, { 
   const json = await res.json();
   const items = json.data ?? [];
 
-  console.log(`[apostille] search url=${url}`);
-  console.log(`[apostille] fetched ${items.length} item(s)`);
-
   const matches = [];
 
   const tryMatch = (tx, meta) => {
     const cert = tryParseCert(tx.message);
-    console.log(`[apostille] tx type=${tx.type} message=${tx.message ?? "(none)"} parsedCert=`, cert);
     if (cert && cert.fileHash === fileHashHex) {
       matches.push({
         hash: meta.hash,
@@ -150,25 +146,30 @@ export async function searchApostilleTransactions(fileHashHex, targetAddress, { 
   for (const item of items) {
     const tx = item.transaction;
 
-    // デバッグ用: 全アイテムのtypeと、アグリゲート系typeの場合は生の中身を出力
-    console.log(`[apostille] item type=${tx.type} keys=${Object.keys(tx).join(",")}`);
-    if (tx.type === 16705 || tx.type === 16961 || tx.type === "16705" || tx.type === "16961") {
-      console.log("[apostille] aggregate raw item:", JSON.parse(JSON.stringify(item)));
-    }
-
-    // ケース1: embedded=true でトップレベルに展開されている場合
+    // 通常の(アグリゲートでない)トランザクションは、そのままメッセージを確認できる
     if (tx.message) {
       tryMatch(tx, item.meta);
+      continue;
     }
 
-    // ケース2: アグリゲート内に transactions[] としてネストされている場合
-    if (Array.isArray(tx.transactions)) {
-      for (const inner of tx.transactions) {
-        const innerTx = inner.transaction ?? inner;
-        if (innerTx.message) {
+    // アグリゲート(Complete/Bonded)は一覧に埋め込みTxの中身を含まないため、
+    // ハッシュを使って個別に詳細を取得し直す
+    const isAggregate = tx.type === 16705 || tx.type === 16961 || tx.type === "16705" || tx.type === "16961";
+    if (!isAggregate) continue;
+
+    try {
+      const detailRes = await fetch(`${appState.NODE}/transactions/confirmed/${item.meta.hash}`);
+      const detail = await detailRes.json();
+      const innerTxs = detail.transaction?.transactions ?? [];
+
+      for (const inner of innerTxs) {
+        const innerTx = inner.transaction;
+        if (innerTx?.message) {
           tryMatch(innerTx, item.meta);
         }
       }
+    } catch (e) {
+      console.warn("[apostille] アグリゲート詳細の取得に失敗:", item.meta.hash, e);
     }
   }
 
