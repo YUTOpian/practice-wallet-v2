@@ -29,15 +29,46 @@
       </p>
 
       <div class="settings-menu">
-        <button id="choose-sss" class="settings-menu-item">
-          🧩 SSS Extensionと接続する
+        <button id="choose-create-new" class="settings-menu-item">
+          🆕 新規作成
         </button>
         <button id="choose-mnemonic" class="settings-menu-item">
           📝 ニーモニックをインポートする
         </button>
+        <button id="choose-sss" class="settings-menu-item">
+          🧩 SSS Extensionと接続する
+        </button>
       </div>
 
       <div id="welcome-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       新規作成画面
+  ============================================================ -->
+  <div id="create-new-page" class="page">
+    <div class="card">
+      <h2>新規作成</h2>
+      <button id="back-welcome-create-new" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        以下のニーモニックフレーズが、あなたの新しいアカウントの鍵になります。
+        <b>紙に書き写すなどして、必ず安全な場所に記録してください。</b>
+        このフレーズを失うとアカウントに二度とアクセスできなくなり、
+        他人に知られるとアカウントの資産を自由に操作されてしまいます。
+      </p>
+
+      <div id="create-new-mnemonic" class="input-box" style="word-break:break-all; user-select: text;">生成中...</div>
+
+      <p><b>ネットワーク：</b></p>
+      <select id="create-new-network-select" class="input-box">
+        <option value="mainnet">Mainnet</option>
+        <option value="testnet">Testnet</option>
+      </select>
+
+      <button id="create-new-next-btn" class="button-primary">次に進む</button>
+      <div id="create-new-status"></div>
     </div>
   </div>
 
@@ -288,6 +319,9 @@
         </button>
         <button id="menu-add-privatekey" class="settings-menu-item">
           🔑 秘密鍵でアカウント追加
+        </button>
+        <button id="lock-session-btn" class="settings-menu-item" style="display:none;">
+          🔒 ログイン画面に戻る
         </button>
         <button id="logout-btn" class="settings-menu-item">
           🚪 ログアウト
