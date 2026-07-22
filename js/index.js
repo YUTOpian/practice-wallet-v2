@@ -1,6 +1,6 @@
 // index.js
 
-import { appState, NetworkType } from "./config.js";
+import { appState, NetworkType, getXymMosaicIdHex } from "./config.js";
 import { sendTx } from "./transfer.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
@@ -72,6 +72,12 @@ import {
   setOperationRestriction,
   OPERATION_TYPE_OPTIONS,
 } from "./restriction.js";
+import {
+  composeAndSignOfflineTransfer,
+  downloadOfflineTxJson,
+  validateOfflineTxJson,
+  broadcastOfflineTx,
+} from "./offline.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -118,6 +124,8 @@ window.addEventListener("load", async () => {
   const restrictionAddressPage = document.getElementById("restriction-address-page");
   const restrictionMosaicPage = document.getElementById("restriction-mosaic-page");
   const restrictionOperationPage = document.getElementById("restriction-operation-page");
+  const offlineTxCreatePage = document.getElementById("offline-tx-create-page");
+  const offlineBroadcastPage = document.getElementById("offline-broadcast-page");
 
   // ============================
   // ページ切替
@@ -1015,6 +1023,122 @@ window.addEventListener("load", async () => {
     }
   });
 
+  // ============================
+  // オフライントランザクション(作成・署名 / ログイン中のみ)
+  // ============================
+  let offlineTxGenerated = null;
+
+  document.getElementById("menu-offline-tx")?.addEventListener("click", () => {
+    offlineTxGenerated = null;
+    document.getElementById("offline-tx-recipient").value = "";
+    document.getElementById("offline-tx-mosaic").value = "";
+    document.getElementById("offline-tx-amount").value = "0";
+    document.getElementById("offline-tx-message").value = "";
+    document.getElementById("offline-tx-result").style.display = "none";
+    setStatus("offline-tx-status", "", "default");
+    showPage(offlineTxCreatePage);
+  });
+
+  document.getElementById("offline-tx-sign-btn")?.addEventListener("click", async () => {
+    const recipientAddress = document.getElementById("offline-tx-recipient").value.trim();
+    const mosaicInput = document.getElementById("offline-tx-mosaic").value.trim();
+    const amount = Number(document.getElementById("offline-tx-amount").value);
+    const message = document.getElementById("offline-tx-message").value;
+
+    if (!recipientAddress) {
+      setStatus("offline-tx-status", "宛先アドレスを入力してください。", "error");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      setStatus("offline-tx-status", "数量が不正です。", "error");
+      return;
+    }
+
+    const mosaicIdHex = mosaicInput || getXymMosaicIdHex();
+
+    setStatus("offline-tx-status", "署名中...");
+    try {
+      offlineTxGenerated = await composeAndSignOfflineTransfer({
+        recipientAddress,
+        mosaicIdHex,
+        amount,
+        message,
+      });
+      document.getElementById("offline-tx-hash").textContent = offlineTxGenerated.hash;
+      document.getElementById("offline-tx-result").style.display = "block";
+      setStatus("offline-tx-status", "✅ 署名しました。ノードへはまだ送信されていません。ファイルをダウンロードしてください。", "success");
+    } catch (e) {
+      console.error("composeAndSignOfflineTransfer error:", e);
+      setStatus("offline-tx-status", e.message || "署名に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("offline-tx-download-btn")?.addEventListener("click", () => {
+    if (!offlineTxGenerated) return;
+    downloadOfflineTxJson(offlineTxGenerated, `offline-tx-${offlineTxGenerated.hash.slice(0, 8)}.json`);
+  });
+
+  // ============================
+  // オフライン署名データの読み込み・ブロードキャスト(ログイン不要)
+  // ============================
+  let offlineBroadcastJson = null;
+
+  function openOfflineBroadcastPage() {
+    offlineBroadcastJson = null;
+    document.getElementById("offline-broadcast-file").value = "";
+    document.getElementById("offline-broadcast-preview").style.display = "none";
+    setStatus("offline-broadcast-status", "", "default");
+    showPage(offlineBroadcastPage);
+  }
+
+  document.getElementById("welcome-offline-broadcast-btn")?.addEventListener("click", openOfflineBroadcastPage);
+  document.getElementById("unlock-offline-broadcast-btn")?.addEventListener("click", openOfflineBroadcastPage);
+
+  document.getElementById("offline-broadcast-file")?.addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      offlineBroadcastJson = validateOfflineTxJson(json);
+
+      document.getElementById("offline-broadcast-network").textContent = json.network ?? "---";
+      document.getElementById("offline-broadcast-type").textContent = json.transactionType ?? "---";
+      document.getElementById("offline-broadcast-hash").textContent = json.hash ?? "---";
+      document.getElementById("offline-broadcast-signer").textContent = json.signerPublicKey ?? "---";
+      document.getElementById("offline-broadcast-preview").style.display = "block";
+      setStatus("offline-broadcast-status", "", "default");
+    } catch (err) {
+      console.error("offline broadcast file parse error:", err);
+      offlineBroadcastJson = null;
+      document.getElementById("offline-broadcast-preview").style.display = "none";
+      setStatus("offline-broadcast-status", err.message || "ファイルの読み込みに失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("offline-broadcast-submit")?.addEventListener("click", async () => {
+    const nodeUrl = document.getElementById("offline-broadcast-node").value.trim();
+
+    if (!offlineBroadcastJson) {
+      setStatus("offline-broadcast-status", "ファイルを選択してください。", "error");
+      return;
+    }
+    if (!nodeUrl) {
+      setStatus("offline-broadcast-status", "ノードURLを入力してください。", "error");
+      return;
+    }
+
+    setStatus("offline-broadcast-status", "アナウンス中...");
+    try {
+      await broadcastOfflineTx(offlineBroadcastJson, nodeUrl);
+      setStatus("offline-broadcast-status", `✅ ノードへ送信しました。Hash: ${offlineBroadcastJson.hash}`, "success");
+    } catch (e) {
+      console.error("broadcastOfflineTx error:", e);
+      setStatus("offline-broadcast-status", e.message || "アナウンスに失敗しました。", "error");
+    }
+  });
+
   document.getElementById("register-root-namespace-btn")?.addEventListener("click", async () => {
     const name = document.getElementById("root-namespace-name").value.trim();
     const duration = parseInt(document.getElementById("root-namespace-duration").value, 10);
@@ -1364,6 +1488,8 @@ window.addEventListener("load", async () => {
   document.getElementById("back-restriction-menu-address")?.addEventListener("click", () => showPage(restrictionMenuPage));
   document.getElementById("back-restriction-menu-mosaic")?.addEventListener("click", () => showPage(restrictionMenuPage));
   document.getElementById("back-restriction-menu-operation")?.addEventListener("click", () => showPage(restrictionMenuPage));
+  document.getElementById("back-advanced-offline-tx")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-offline-broadcast")?.addEventListener("click", () => showPage(welcomePage));
 
   // ============================
   // タブ切替
