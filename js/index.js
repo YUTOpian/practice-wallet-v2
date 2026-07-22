@@ -24,6 +24,8 @@ import {
   saveVault,
   clearVault,
   logout,
+  lockSession,
+  generateNewMnemonic,
   switchToAccount,
   setAccountHidden,
   addAccountFromMnemonic,
@@ -78,6 +80,7 @@ window.addEventListener("load", async () => {
   // ページ取得
   // ============================
   const welcomePage = document.getElementById("welcome-page");
+  const createNewPage = document.getElementById("create-new-page");
   const mnemonicImportPage = document.getElementById("mnemonic-import-page");
   const passwordSetupPage = document.getElementById("password-setup-page");
   const unlockPage = document.getElementById("unlock-page");
@@ -161,6 +164,51 @@ window.addEventListener("load", async () => {
     } catch (e) {
       console.error("connectWithSSS error:", e);
       setStatus("welcome-status", e.message || "SSS Extensionとの接続に失敗しました。", "error");
+    }
+  });
+
+  // ============================
+  // 新規作成
+  // ============================
+  document.getElementById("choose-create-new")?.addEventListener("click", async () => {
+    showPage(createNewPage);
+    setStatus("create-new-status", "", "default");
+    const mnemonicEl = document.getElementById("create-new-mnemonic");
+    mnemonicEl.textContent = "生成中...";
+    try {
+      const mnemonic = await generateNewMnemonic();
+      mnemonicEl.textContent = mnemonic;
+      mnemonicEl.dataset.mnemonic = mnemonic;
+    } catch (e) {
+      console.error("generateNewMnemonic error:", e);
+      mnemonicEl.textContent = "生成に失敗しました。";
+    }
+  });
+
+  document.getElementById("back-welcome-create-new")?.addEventListener("click", () => showPage(welcomePage));
+
+  document.getElementById("create-new-next-btn")?.addEventListener("click", async () => {
+    const mnemonicPhrase = document.getElementById("create-new-mnemonic").dataset.mnemonic;
+    const networkChoice = document.getElementById("create-new-network-select").value;
+    const networkType = networkChoice === "testnet" ? NetworkType.TESTNET : NetworkType.MAINNET;
+
+    if (!mnemonicPhrase) {
+      setStatus("create-new-status", "ニーモニックの生成が完了していません。", "error");
+      return;
+    }
+
+    if (!confirm("ニーモニックを記録しましたか？\n\n記録していない場合、このアカウントには二度とアクセスできなくなります。")) {
+      return;
+    }
+
+    setStatus("create-new-status", "作成中...");
+    try {
+      await loginWithMnemonic(mnemonicPhrase, networkType);
+      setStatus("create-new-status", "", "default");
+      showPage(passwordSetupPage);
+    } catch (e) {
+      console.error("loginWithMnemonic(create-new) error:", e);
+      setStatus("create-new-status", e.message || "作成に失敗しました。", "error");
     }
   });
 
@@ -1082,7 +1130,17 @@ window.addEventListener("load", async () => {
     const privatekeyAddItem = document.getElementById("menu-add-privatekey");
     if (mnemonicAddItem) mnemonicAddItem.style.display = isSss ? "none" : "";
     if (privatekeyAddItem) privatekeyAddItem.style.display = isSss ? "none" : "";
+
+    const lockBtn = document.getElementById("lock-session-btn");
+    if (lockBtn) lockBtn.style.display = appState.authMode === "local" ? "" : "none";
+
     showPage(settingsPage);
+  });
+
+  document.getElementById("lock-session-btn")?.addEventListener("click", () => {
+    lockSession();
+    setStatus("unlock-status", "", "default");
+    showPage(unlockPage);
   });
 
   document.getElementById("menu-node-settings")?.addEventListener("click", async () => {
