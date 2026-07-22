@@ -314,6 +314,9 @@
         <button id="menu-fee-settings" class="settings-menu-item">
           送金手数料の設定
         </button>
+        <button id="menu-network-switch" class="settings-menu-item" style="display:none;">
+          🌐 ネットワーク切り替え
+        </button>
         <button id="menu-add-mnemonic" class="settings-menu-item">
           📝 ニーモニックでアカウント追加
         </button>
@@ -389,6 +392,31 @@
 
       <button id="apply-fee-btn" class="button-primary">この設定を保存する</button>
       <div id="fee-settings-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ネットワーク切り替え画面
+  ============================================================ -->
+  <div id="network-switch-page" class="page">
+    <div class="card">
+      <h2>ネットワーク切り替え</h2>
+      <button id="back-settings-network" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        現在: <span id="network-switch-current">---</span>
+      </p>
+
+      <div class="settings-menu">
+        <button id="network-switch-mainnet" class="settings-menu-item">
+          🟢 Mainnet に切り替える
+        </button>
+        <button id="network-switch-testnet" class="settings-menu-item">
+          🟡 Testnet に切り替える
+        </button>
+      </div>
+
+      <div id="network-switch-status"></div>
     </div>
   </div>
 
