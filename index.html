@@ -41,6 +41,13 @@
       </div>
 
       <div id="welcome-status"></div>
+
+      <hr>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        オフラインで署名済みのトランザクションファイルをお持ちの場合は、こちらから読み込んでブロードキャストできます（ログイン不要）。
+      </p>
+      <button id="welcome-offline-broadcast-btn" class="button-primary">📥 オフライン署名データを読み込む</button>
     </div>
   </div>
 
@@ -144,6 +151,13 @@
         SSS接続かニーモニックの入力からやり直せます（ニーモニックさえ分かっていれば、資産がなくなることはありません）。
       </p>
       <button id="forget-account-btn" class="button-primary">保存データを削除してやり直す</button>
+
+      <hr>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        オフラインで署名済みのトランザクションファイルをお持ちの場合は、こちらから読み込んでブロードキャストできます（ログイン不要）。
+      </p>
+      <button id="unlock-offline-broadcast-btn" class="button-primary">📥 オフライン署名データを読み込む</button>
     </div>
   </div>
 
@@ -536,6 +550,9 @@
         </button>
         <button id="menu-restriction" class="settings-menu-item">
           🚧 制限機能
+        </button>
+        <button id="menu-offline-tx" class="settings-menu-item">
+          📡 オフライントランザクション
         </button>
       </div>
     </div>
@@ -1064,6 +1081,82 @@
 
       <button id="restriction-operation-submit" class="button-primary">この内容で設定する</button>
       <div id="restriction-operation-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       オフライントランザクション作成・署名(ログイン中のみ)
+  ============================================================ -->
+  <div id="offline-tx-create-page" class="page">
+    <div class="card">
+      <h2>オフライントランザクション</h2>
+      <button id="back-advanced-offline-tx" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        ここで作成した送金内容はこの場で署名され、ノードへは送信されません。
+        署名済みデータをJSONファイルとして保存し、オンライン環境の端末でブロードキャストしてください。
+        秘密鍵がオンライン環境に渡ることはありません。
+      </p>
+
+      <p><b>宛先アドレス：</b></p>
+      <input id="offline-tx-recipient" class="input-box" placeholder="宛先アドレス">
+
+      <p><b>モザイクID（16進、空欄ならXYM）：</b></p>
+      <input id="offline-tx-mosaic" class="input-box" placeholder="空欄ならXYM">
+
+      <p><b>数量：</b></p>
+      <input id="offline-tx-amount" class="input-box" type="number" min="0" step="any" value="0">
+
+      <p><b>メッセージ（任意）：</b></p>
+      <textarea id="offline-tx-message" class="input-box" placeholder="メッセージ"></textarea>
+
+      <button id="offline-tx-sign-btn" class="button-primary">署名してファイルを生成する</button>
+      <div id="offline-tx-status"></div>
+
+      <div id="offline-tx-result" style="display:none;">
+        <hr>
+        <h3>署名済みデータ</h3>
+        <div style="font-size:12px;color:#94a3b8;word-break:break-all;">
+          Hash: <span id="offline-tx-hash"></span>
+        </div>
+        <button id="offline-tx-download-btn" class="button-primary">📥 JSONファイルをダウンロード</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       オフライン署名データの読み込み・ブロードキャスト(ログイン不要)
+  ============================================================ -->
+  <div id="offline-broadcast-page" class="page">
+    <div class="card">
+      <h2>オフライン署名データの読み込み</h2>
+      <button id="back-offline-broadcast" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        署名済みのJSONファイルを選択すると内容を確認できます。ここでは秘密鍵は一切扱わず、
+        ノードへの送信（ブロードキャスト）のみを行います。
+      </p>
+
+      <p><b>署名済みJSONファイル：</b></p>
+      <input id="offline-broadcast-file" class="input-box" type="file" accept=".json,application/json">
+
+      <div id="offline-broadcast-preview" style="display:none;">
+        <hr>
+        <h3>内容の確認</h3>
+        <div class="harvest-history-item">
+          <div>ネットワーク: <span id="offline-broadcast-network"></span></div>
+          <div>種類: <span id="offline-broadcast-type"></span></div>
+          <div>Hash: <span id="offline-broadcast-hash" style="word-break:break-all;"></span></div>
+          <div>署名者公開鍵: <span id="offline-broadcast-signer" style="word-break:break-all;"></span></div>
+        </div>
+
+        <p><b>ブロードキャスト先ノードURL：</b></p>
+        <input id="offline-broadcast-node" class="input-box" placeholder="例: https://xxx.xxx.jp:3001">
+
+        <button id="offline-broadcast-submit" class="button-primary">ノードへアナウンスする</button>
+      </div>
+
+      <div id="offline-broadcast-status"></div>
     </div>
   </div>
 
