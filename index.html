@@ -467,6 +467,9 @@
         <button id="menu-apostille" class="settings-menu-item">
           📜 アポスティーユ
         </button>
+        <button id="menu-restriction" class="settings-menu-item">
+          🚧 制限機能
+        </button>
       </div>
     </div>
   </div>
@@ -861,6 +864,139 @@
       <button id="apostille-history-btn" class="button-primary">履歴を検索</button>
       <div id="apostille-history-status"></div>
       <div id="apostille-history-list"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       制限機能メニュー
+  ============================================================ -->
+  <div id="restriction-menu-page" class="page">
+    <div class="card">
+      <h2>制限機能</h2>
+      <button id="back-advanced-restriction-menu" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        いずれも今ログイン中のアカウント自身に対する制限です。自分の署名だけで設定できます。
+      </p>
+
+      <div class="settings-menu">
+        <button id="menu-restriction-address" class="settings-menu-item">
+          🧑 アカウント制限
+        </button>
+        <button id="menu-restriction-mosaic" class="settings-menu-item">
+          🪙 モザイク制限
+        </button>
+        <button id="menu-restriction-operation" class="settings-menu-item">
+          📄 トランザクション制限
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       アカウント制限(アドレス)
+  ============================================================ -->
+  <div id="restriction-address-page" class="page">
+    <div class="card">
+      <h2>アカウント制限（アドレス）</h2>
+      <button id="back-restriction-menu-address" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        指定したアドレスからの受信、または指定したアドレスへの送信を許可／ブロックします。
+      </p>
+
+      <h3>現在の設定</h3>
+      <div id="restriction-current-address">読み込み中...</div>
+
+      <hr>
+
+      <label class="encrypt-option">
+        <input type="checkbox" id="restriction-address-block">
+        <span>ブロックリストにする（未チェックなら許可リスト）</span>
+      </label>
+      <label class="encrypt-option">
+        <input type="checkbox" id="restriction-address-outgoing">
+        <span>送信(自分発)に適用する（未チェックなら受信に適用）</span>
+      </label>
+
+      <p><b>追加するアドレス（1行に1つ）：</b></p>
+      <textarea id="restriction-address-add" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+
+      <p><b>削除するアドレス（1行に1つ）：</b></p>
+      <textarea id="restriction-address-remove" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+
+      <button id="restriction-address-submit" class="button-primary">この内容で設定する</button>
+      <div id="restriction-address-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       モザイク制限
+  ============================================================ -->
+  <div id="restriction-mosaic-page" class="page">
+    <div class="card">
+      <h2>モザイク制限</h2>
+      <button id="back-restriction-menu-mosaic" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        指定したモザイクの受信、または送信を許可／ブロックします。
+      </p>
+
+      <h3>現在の設定</h3>
+      <div id="restriction-current-mosaic">読み込み中...</div>
+
+      <hr>
+
+      <label class="encrypt-option">
+        <input type="checkbox" id="restriction-mosaic-block">
+        <span>ブロックリストにする（未チェックなら許可リスト）</span>
+      </label>
+      <label class="encrypt-option">
+        <input type="checkbox" id="restriction-mosaic-outgoing">
+        <span>送信(自分発)に適用する（未チェックなら受信に適用）</span>
+      </label>
+
+      <p><b>追加するモザイクID（1行に1つ、16進）：</b></p>
+      <textarea id="restriction-mosaic-add" class="input-box" placeholder="例: 72C0212E67A08BCE"></textarea>
+
+      <p><b>削除するモザイクID（1行に1つ、16進）：</b></p>
+      <textarea id="restriction-mosaic-remove" class="input-box" placeholder="例: 72C0212E67A08BCE"></textarea>
+
+      <button id="restriction-mosaic-submit" class="button-primary">この内容で設定する</button>
+      <div id="restriction-mosaic-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       トランザクション制限(操作)
+  ============================================================ -->
+  <div id="restriction-operation-page" class="page">
+    <div class="card">
+      <h2>トランザクション制限</h2>
+      <button id="back-restriction-menu-operation" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        指定した種類のトランザクションの送信を許可／ブロックします（受信方向には適用できません）。
+      </p>
+
+      <h3>現在の設定</h3>
+      <div id="restriction-current-operation">読み込み中...</div>
+
+      <hr>
+
+      <label class="encrypt-option">
+        <input type="checkbox" id="restriction-operation-block">
+        <span>ブロックリストにする（未チェックなら許可リスト）</span>
+      </label>
+
+      <p><b>追加する種類：</b></p>
+      <select id="restriction-operation-add" class="input-box" multiple size="6"></select>
+
+      <p><b>削除する種類：</b></p>
+      <select id="restriction-operation-remove" class="input-box" multiple size="6"></select>
+
+      <button id="restriction-operation-submit" class="button-primary">この内容で設定する</button>
+      <div id="restriction-operation-status"></div>
     </div>
   </div>
 
