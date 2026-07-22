@@ -21,6 +21,18 @@ export function hasCurrentMnemonic() {
 }
 
 /* ============================================================
+   新規ニーモニック生成(24語, Symbol公式ウォレットと同じ強度)
+============================================================ */
+export async function generateNewMnemonic() {
+  const [bip39, wordlistModule] = await Promise.all([
+    import("https://esm.sh/@scure/bip39@2.2.0"),
+    import("https://esm.sh/@scure/bip39@2.2.0/wordlists/english"),
+  ]);
+  const { wordlist } = wordlistModule;
+  return bip39.generateMnemonic(wordlist, 256);
+}
+
+/* ============================================================
    ニーモニック → 秘密鍵 (BIP39 + SLIP-10)
    @scure/bip39 と micro-ed25519-hdkey はどちらもNode.jsのBufferに
    依存しない監査済みの純粋なJS実装で、ブラウザでの動作実績が多いため採用。
@@ -521,13 +533,9 @@ export async function signAndAnnounceTx(tx) {
 }
 
 /* ============================================================
-   ログアウト
-   保存済みアカウント(パスワード付きボールト)も削除するため、
-   次回は自動ログインできず、必ずSSS接続かニーモニック/秘密鍵の
-   再入力が必要になる
+   セッション状態のリセット(共通処理)
 ============================================================ */
-export function logout() {
-  clearVault();
+function resetSessionState() {
   closeWebSocket();
   currentMnemonicPhrase = null;
 
@@ -541,6 +549,30 @@ export function logout() {
   appState.networkType = null;
   appState.accounts = [];
   appState.activeAccountId = null;
+}
+
+/* ============================================================
+   ログアウト
+   保存済みアカウント(パスワード付きボールト)も削除するため、
+   次回は自動ログインできず、必ずSSS接続かニーモニック/秘密鍵の
+   再入力が必要になる
+============================================================ */
+export function logout() {
+  clearVault();
+  resetSessionState();
+}
+
+/* ============================================================
+   ロック
+   ログアウトと違い、保存済みボールト(localStorage)は削除しない。
+   次回はパスワード入力(ロック解除画面)だけで復帰できる。
+   新規作成 / ニーモニックインポートでログインした場合(authMode==="local")
+   のみ使う想定。
+============================================================ */
+export function lockSession() {
+  sessionSalt = null;
+  sessionKey = null;
+  resetSessionState();
 }
 
 /* ============================================================
