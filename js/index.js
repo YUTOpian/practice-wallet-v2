@@ -1132,7 +1132,7 @@ window.addEventListener("load", async () => {
     if (privatekeyAddItem) privatekeyAddItem.style.display = isSss ? "none" : "";
 
     const lockBtn = document.getElementById("lock-session-btn");
-    if (lockBtn) lockBtn.style.display = appState.authMode === "local" ? "" : "none";
+    if (lockBtn) lockBtn.style.display = getVaultMode() === "encrypted" ? "" : "none";
 
     showPage(settingsPage);
   });
