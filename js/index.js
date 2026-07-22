@@ -224,10 +224,6 @@ window.addEventListener("load", async () => {
     }
   });
 
-  document.getElementById("skip-password-btn")?.addEventListener("click", () => {
-    goHome();
-  });
-
   // ============================
   // ロック解除(保存済みアカウントでログイン)
   // ============================
@@ -245,6 +241,17 @@ window.addEventListener("load", async () => {
     } catch (e) {
       console.error("unlockVault error:", e);
       setStatus("unlock-status", e.message || "ログインに失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("unlock-sss-btn")?.addEventListener("click", async () => {
+    setStatus("unlock-status", "SSS Extensionに接続中...");
+    try {
+      await connectWithSSS();
+      goHome();
+    } catch (e) {
+      console.error("connectWithSSS error:", e);
+      setStatus("unlock-status", e.message || "SSS Extensionとの接続に失敗しました。", "error");
     }
   });
 
