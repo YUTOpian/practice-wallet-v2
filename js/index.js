@@ -32,6 +32,7 @@ import {
   addAccountFromPrivateKey,
   addNextAccountFromCurrentMnemonic,
   hasCurrentMnemonic,
+  switchNetwork,
 } from "./auth.js";
 import {
   updateSwitcherVisibility,
@@ -92,6 +93,7 @@ window.addEventListener("load", async () => {
   const settingsPage = document.getElementById("settings-page");
   const nodeSettingsPage = document.getElementById("node-settings-page");
   const feeSettingsPage = document.getElementById("fee-settings-page");
+  const networkSwitchPage = document.getElementById("network-switch-page");
   const accountSwitcherPage = document.getElementById("account-switcher-page");
   const hiddenAccountsPage = document.getElementById("hidden-accounts-page");
   const addAccountMenuPage = document.getElementById("add-account-menu-page");
@@ -1134,6 +1136,9 @@ window.addEventListener("load", async () => {
     const lockBtn = document.getElementById("lock-session-btn");
     if (lockBtn) lockBtn.style.display = getVaultMode() === "encrypted" ? "" : "none";
 
+    const networkSwitchItem = document.getElementById("menu-network-switch");
+    if (networkSwitchItem) networkSwitchItem.style.display = isSss ? "none" : "";
+
     showPage(settingsPage);
   });
 
@@ -1153,6 +1158,29 @@ window.addEventListener("load", async () => {
     showPage(feeSettingsPage);
     await loadFeeSettings();
   });
+
+  document.getElementById("menu-network-switch")?.addEventListener("click", () => {
+    document.getElementById("network-switch-current").textContent =
+      appState.networkType === NetworkType.TESTNET ? "Testnet" : "Mainnet";
+    setStatus("network-switch-status", "", "default");
+    showPage(networkSwitchPage);
+  });
+
+  async function handleNetworkSwitch(networkType) {
+    setStatus("network-switch-status", "切り替え中...");
+    try {
+      await switchNetwork(networkType);
+      document.getElementById("network-switch-current").textContent =
+        networkType === NetworkType.TESTNET ? "Testnet" : "Mainnet";
+      setStatus("network-switch-status", "✅ 切り替えました。", "success");
+    } catch (e) {
+      console.error("switchNetwork error:", e);
+      setStatus("network-switch-status", e.message || "切り替えに失敗しました。", "error");
+    }
+  }
+
+  document.getElementById("network-switch-mainnet")?.addEventListener("click", () => handleNetworkSwitch(NetworkType.MAINNET));
+  document.getElementById("network-switch-testnet")?.addEventListener("click", () => handleNetworkSwitch(NetworkType.TESTNET));
 
   document.getElementById("apply-node-btn")?.addEventListener("click", applyNodeChange);
 
@@ -1311,6 +1339,7 @@ window.addEventListener("load", async () => {
   document.getElementById("back-account-settings")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-settings-node")?.addEventListener("click", () => showPage(settingsPage));
   document.getElementById("back-settings-fee")?.addEventListener("click", () => showPage(settingsPage));
+  document.getElementById("back-settings-network")?.addEventListener("click", () => showPage(settingsPage));
   document.getElementById("back-account-switcher")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-hidden-accounts")?.addEventListener("click", () => showPage(accountSwitcherPage));
   document.getElementById("back-add-account-menu")?.addEventListener("click", () => showPage(accountSwitcherPage));
