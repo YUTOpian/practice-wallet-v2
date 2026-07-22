@@ -1077,6 +1077,11 @@ window.addEventListener("load", async () => {
   // 設定メニュー
   // ============================
   document.getElementById("settings-btn")?.addEventListener("click", () => {
+    const isSss = appState.authMode === "sss";
+    const mnemonicAddItem = document.getElementById("menu-add-mnemonic");
+    const privatekeyAddItem = document.getElementById("menu-add-privatekey");
+    if (mnemonicAddItem) mnemonicAddItem.style.display = isSss ? "none" : "";
+    if (privatekeyAddItem) privatekeyAddItem.style.display = isSss ? "none" : "";
     showPage(settingsPage);
   });
 
