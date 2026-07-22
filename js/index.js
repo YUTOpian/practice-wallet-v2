@@ -4,6 +4,7 @@ import { appState, NetworkType, getXymMosaicIdHex } from "./config.js";
 import { sendTx } from "./transfer.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
+import { selectNode } from "./nodeSelector.js";
 import { showPopup } from "./utils.js";
 import { setStatus } from "./ui.js";
 import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates, loadHarvestHistory } from "./harvest.js";
@@ -1098,6 +1099,8 @@ window.addEventListener("load", async () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const nodeInput = document.getElementById("offline-broadcast-node");
+
     try {
       const text = await file.text();
       const json = JSON.parse(text);
@@ -1108,7 +1111,16 @@ window.addEventListener("load", async () => {
       document.getElementById("offline-broadcast-hash").textContent = json.hash ?? "---";
       document.getElementById("offline-broadcast-signer").textContent = json.signerPublicKey ?? "---";
       document.getElementById("offline-broadcast-preview").style.display = "block";
-      setStatus("offline-broadcast-status", "", "default");
+      setStatus("offline-broadcast-status", "ノードを自動選択中...", "default");
+
+      const isTestnet = json.network === "TEST_NET";
+      try {
+        nodeInput.value = await selectNode(isTestnet);
+        setStatus("offline-broadcast-status", "ノードを自動選択しました。必要であれば変更できます。", "success");
+      } catch (nodeErr) {
+        console.warn("ノード自動選択に失敗しました。手動で入力してください。", nodeErr);
+        setStatus("offline-broadcast-status", "ノードの自動選択に失敗しました。手動で入力してください。", "error");
+      }
     } catch (err) {
       console.error("offline broadcast file parse error:", err);
       offlineBroadcastJson = null;
