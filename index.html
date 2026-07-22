@@ -71,18 +71,16 @@
   ============================================================ -->
   <div id="password-setup-page" class="page">
     <div class="card">
-      <h2>パスワードの設定（任意）</h2>
+      <h2>パスワードの設定</h2>
       <p style="font-size:13px;color:#94a3b8;">
-        パスワードを設定すると、暗号化してこの端末に保存され、次回はパスワード入力でログインできます。
-        設定しない場合も、ログアウトするまではこの端末に保存され、次回リロード時は確認なしでそのままログインした状態になります
-        （ただし暗号化されないため、端末を共有している場合はパスワード設定をおすすめします）。
+        ニーモニックでログインしたアカウントは、必ずパスワードを設定して暗号化保存します。
+        次回はこのパスワードを入力してログインできます。
       </p>
 
-      <input id="setup-password-input" class="input-box" type="password" placeholder="パスワード（8文字以上推奨）">
+      <input id="setup-password-input" class="input-box" type="password" placeholder="パスワード（8文字以上）">
       <input id="setup-password-confirm" class="input-box" type="password" placeholder="パスワード（確認）">
 
       <button id="save-password-btn" class="button-primary">パスワードを設定して保存する</button>
-      <button id="skip-password-btn" class="button-primary">設定しない（このまま進む）</button>
       <div id="password-setup-status"></div>
     </div>
   </div>
@@ -100,6 +98,13 @@
       <input id="unlock-password-input" class="input-box" type="password" placeholder="パスワード">
       <button id="unlock-btn" class="button-primary">ログイン</button>
       <div id="unlock-status"></div>
+
+      <hr>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        パスワードの代わりに、SSS Extensionで接続することもできます。
+      </p>
+      <button id="unlock-sss-btn" class="button-primary">🧩 SSS Extensionと接続する</button>
 
       <hr>
 
