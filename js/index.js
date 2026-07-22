@@ -62,6 +62,13 @@ import {
 } from "./multisig.js";
 import { parseCsv, sendMultiTransfer } from "./multisend.js";
 import { computeFileHash, createApostille, searchApostilleTransactions } from "./apostille.js";
+import {
+  loadAccountRestrictions,
+  setAddressRestriction,
+  setMosaicRestriction,
+  setOperationRestriction,
+  OPERATION_TYPE_OPTIONS,
+} from "./restriction.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -102,6 +109,10 @@ window.addEventListener("load", async () => {
   const apostilleCreatePage = document.getElementById("apostille-create-page");
   const apostilleVerifyPage = document.getElementById("apostille-verify-page");
   const apostilleHistoryPage = document.getElementById("apostille-history-page");
+  const restrictionMenuPage = document.getElementById("restriction-menu-page");
+  const restrictionAddressPage = document.getElementById("restriction-address-page");
+  const restrictionMosaicPage = document.getElementById("restriction-mosaic-page");
+  const restrictionOperationPage = document.getElementById("restriction-operation-page");
 
   // ============================
   // ページ切替
@@ -843,6 +854,110 @@ window.addEventListener("load", async () => {
     }
   });
 
+  // ============================
+  // 制限機能
+  // ============================
+  function populateOperationSelects() {
+    const addSelect = document.getElementById("restriction-operation-add");
+    const removeSelect = document.getElementById("restriction-operation-remove");
+    const optionsHtml = OPERATION_TYPE_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join("");
+    addSelect.innerHTML = optionsHtml;
+    removeSelect.innerHTML = optionsHtml;
+  }
+
+  function readSelectedOptions(selectId) {
+    return Array.from(document.getElementById(selectId).selectedOptions).map(o => o.value);
+  }
+
+  document.getElementById("menu-restriction")?.addEventListener("click", () => {
+    showPage(restrictionMenuPage);
+  });
+
+  document.getElementById("menu-restriction-address")?.addEventListener("click", async () => {
+    showPage(restrictionAddressPage);
+    await loadAccountRestrictions("restriction-current-address", "address");
+  });
+
+  document.getElementById("menu-restriction-mosaic")?.addEventListener("click", async () => {
+    showPage(restrictionMosaicPage);
+    await loadAccountRestrictions("restriction-current-mosaic", "mosaic");
+  });
+
+  document.getElementById("menu-restriction-operation")?.addEventListener("click", async () => {
+    populateOperationSelects();
+    showPage(restrictionOperationPage);
+    await loadAccountRestrictions("restriction-current-operation", "operation");
+  });
+
+  document.getElementById("restriction-address-submit")?.addEventListener("click", async () => {
+    const block = document.getElementById("restriction-address-block").checked;
+    const outgoing = document.getElementById("restriction-address-outgoing").checked;
+    const additions = document.getElementById("restriction-address-add").value.split("\n").map(s => s.trim()).filter(Boolean);
+    const deletions = document.getElementById("restriction-address-remove").value.split("\n").map(s => s.trim()).filter(Boolean);
+
+    if (additions.length === 0 && deletions.length === 0) {
+      setStatus("restriction-address-status", "追加または削除するアドレスを入力してください。", "error");
+      return;
+    }
+
+    setStatus("restriction-address-status", "設定中...");
+    try {
+      const hash = await setAddressRestriction({ block, outgoing, additions, deletions });
+      setStatus("restriction-address-status", `✅ 設定しました。Hash: ${hash}`, "success");
+      document.getElementById("restriction-address-add").value = "";
+      document.getElementById("restriction-address-remove").value = "";
+      await loadAccountRestrictions("restriction-current-address", "address");
+    } catch (e) {
+      console.error("setAddressRestriction error:", e);
+      setStatus("restriction-address-status", e.message || "設定に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("restriction-mosaic-submit")?.addEventListener("click", async () => {
+    const block = document.getElementById("restriction-mosaic-block").checked;
+    const outgoing = document.getElementById("restriction-mosaic-outgoing").checked;
+    const additions = document.getElementById("restriction-mosaic-add").value.split("\n").map(s => s.trim()).filter(Boolean);
+    const deletions = document.getElementById("restriction-mosaic-remove").value.split("\n").map(s => s.trim()).filter(Boolean);
+
+    if (additions.length === 0 && deletions.length === 0) {
+      setStatus("restriction-mosaic-status", "追加または削除するモザイクIDを入力してください。", "error");
+      return;
+    }
+
+    setStatus("restriction-mosaic-status", "設定中...");
+    try {
+      const hash = await setMosaicRestriction({ block, outgoing, additions, deletions });
+      setStatus("restriction-mosaic-status", `✅ 設定しました。Hash: ${hash}`, "success");
+      document.getElementById("restriction-mosaic-add").value = "";
+      document.getElementById("restriction-mosaic-remove").value = "";
+      await loadAccountRestrictions("restriction-current-mosaic", "mosaic");
+    } catch (e) {
+      console.error("setMosaicRestriction error:", e);
+      setStatus("restriction-mosaic-status", e.message || "設定に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("restriction-operation-submit")?.addEventListener("click", async () => {
+    const block = document.getElementById("restriction-operation-block").checked;
+    const additions = readSelectedOptions("restriction-operation-add");
+    const deletions = readSelectedOptions("restriction-operation-remove");
+
+    if (additions.length === 0 && deletions.length === 0) {
+      setStatus("restriction-operation-status", "追加または削除する種類を選択してください。", "error");
+      return;
+    }
+
+    setStatus("restriction-operation-status", "設定中...");
+    try {
+      const hash = await setOperationRestriction({ block, outgoing: true, additions, deletions });
+      setStatus("restriction-operation-status", `✅ 設定しました。Hash: ${hash}`, "success");
+      await loadAccountRestrictions("restriction-current-operation", "operation");
+    } catch (e) {
+      console.error("setOperationRestriction error:", e);
+      setStatus("restriction-operation-status", e.message || "設定に失敗しました。", "error");
+    }
+  });
+
   document.getElementById("register-root-namespace-btn")?.addEventListener("click", async () => {
     const name = document.getElementById("root-namespace-name").value.trim();
     const duration = parseInt(document.getElementById("root-namespace-duration").value, 10);
@@ -1146,6 +1261,10 @@ window.addEventListener("load", async () => {
   document.getElementById("back-apostille-menu-create")?.addEventListener("click", () => showPage(apostilleMenuPage));
   document.getElementById("back-apostille-menu-verify")?.addEventListener("click", () => showPage(apostilleMenuPage));
   document.getElementById("back-apostille-menu-history")?.addEventListener("click", () => showPage(apostilleMenuPage));
+  document.getElementById("back-advanced-restriction-menu")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-restriction-menu-address")?.addEventListener("click", () => showPage(restrictionMenuPage));
+  document.getElementById("back-restriction-menu-mosaic")?.addEventListener("click", () => showPage(restrictionMenuPage));
+  document.getElementById("back-restriction-menu-operation")?.addEventListener("click", () => showPage(restrictionMenuPage));
 
   // ============================
   // タブ切替
