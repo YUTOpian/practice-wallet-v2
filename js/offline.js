@@ -99,6 +99,24 @@ export function validateOfflineTxJson(json) {
 }
 
 /* ============================================================
+   既にブロックチェーンへ送信・承認済みかどうかを確認する
+   (二重ブロードキャスト防止)
+   戻り値: "confirmed" | "unconfirmed" | "failed" | null(未提出)
+============================================================ */
+export async function checkAlreadyBroadcastStatus(hash, nodeUrl) {
+  try {
+    const res = await fetch(new URL(`/transactionStatus/${hash}`, nodeUrl));
+    if (res.status === 404) return null;
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.group ?? null;
+  } catch (e) {
+    console.warn("checkAlreadyBroadcastStatus error:", e);
+    return null;
+  }
+}
+
+/* ============================================================
    ノードへアナウンス(ブロードキャスト)のみ実行。
    ログインやSDK初期化は一切不要(署名済みpayloadをそのまま送るだけ)。
 ============================================================ */
