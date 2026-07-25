@@ -1,6 +1,7 @@
 // auth.js
-// 認証方式の管理: SSS Extension接続 / ニーモニックインポート・秘密鍵インポート(ローカル署名)
-// マルチアカウント対応。パスワードを設定した場合のみ、暗号化してlocalStorageに保存する
+// 認証方式の管理: ニーモニックインポート・秘密鍵インポート(ローカル署名)のみに対応。
+// SSS Extension(Symbol専用の署名拡張機能)はNEMには使えないため撤去した。
+// マルチアカウント対応。パスワードを設定した場合のみ、暗号化してlocalStorageに保存する。
 
 import { appState, NetworkType } from "./config.js";
 import { selectNode } from "./nodeSelector.js";
@@ -9,11 +10,11 @@ import { refreshAccount } from "./account.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket, closeWebSocket } from "./ws.js";
 import { setText } from "./ui.js";
+import { hexToBytes } from "./utils.js";
 
 const VAULT_KEY = "walletVault";
 
 // 現在ログインに使ったニーモニック(セッション中のみメモリ保持、保存はしない)
-// これがあれば「アカウント追加」時に毎回ニーモニックを打ち直さずに済む
 let currentMnemonicPhrase = null;
 
 export function hasCurrentMnemonic() {
@@ -21,7 +22,9 @@ export function hasCurrentMnemonic() {
 }
 
 /* ============================================================
-   新規ニーモニック生成(24語, Symbol公式ウォレットと同じ強度)
+   新規ニーモニック生成(「新規作成」機能用)
+   BIP39の24単語(256bit)ニーモニックを生成して返す。
+   まだどこにも保存しない(画面に表示して記録してもらうだけ)。
 ============================================================ */
 export async function generateNewMnemonic() {
   const [bip39, wordlistModule] = await Promise.all([
@@ -29,15 +32,20 @@ export async function generateNewMnemonic() {
     import("https://esm.sh/@scure/bip39@2.2.0/wordlists/english"),
   ]);
   const { wordlist } = wordlistModule;
-  return bip39.generateMnemonic(wordlist, 256);
+  return bip39.generateMnemonic(wordlist, 256); // 24単語
 }
 
 /* ============================================================
    ニーモニック → 秘密鍵 (BIP39 + SLIP-10)
-   @scure/bip39 と micro-ed25519-hdkey はどちらもNode.jsのBufferに
-   依存しない監査済みの純粋なJS実装で、ブラウザでの動作実績が多いため採用。
-   導出パスはSymbol公式ウォレットと同じ m/44'/4343'/{account}'/0'/0'
+   導出パスはNEMのSLIP44コインタイプ(43)を使用: m/44'/43'/{account}'/0'/0'
    ({account}を変えることで同じニーモニックから複数アカウントを導出できる)
+
+   ※ NISエコシステムの一部ウォレット(NanoWallet等)は、BIP39を使わず
+     "パスフレーズ文字列のSHA3ハッシュをそのまま秘密鍵にする"独自方式を
+     採っていたが、本アプリはSymbol系ウォレットと同じBIP39+HDパスに統一する
+     (NEMコミュニティの一部HDウォレット実装とも互換のはずだが、
+      既存のNIS1ウォレットからの秘密鍵そのもののインポートは
+      「秘密鍵で追加」機能を使うこと)
 ============================================================ */
 async function deriveFromMnemonic(mnemonicPhrase, accountIndex = 0) {
   const [bip39, wordlistModule, hdkeyModule] = await Promise.all([
@@ -48,7 +56,6 @@ async function deriveFromMnemonic(mnemonicPhrase, accountIndex = 0) {
   const { wordlist } = wordlistModule;
   const { HDKey } = hdkeyModule;
 
-  // 貼り付け時の改行・連続スペース・全角スペースを単一の半角スペースに正規化
   const normalized = mnemonicPhrase
     .trim()
     .toLowerCase()
@@ -62,7 +69,7 @@ async function deriveFromMnemonic(mnemonicPhrase, accountIndex = 0) {
   }
 
   const idx = Number.isInteger(accountIndex) && accountIndex >= 0 ? accountIndex : 0;
-  const path = `m/44'/4343'/${idx}'/0'/0'`;
+  const path = `m/44'/43'/${idx}'/0'/0'`; // NEMのSLIP44コインタイプ = 43
 
   const seed = bip39.mnemonicToSeedSync(normalized);
   const hdkey = HDKey.fromMasterSeed(seed);
@@ -93,7 +100,7 @@ export function getAccounts() {
 }
 
 /* ============================================================
-   アカウント切替（SSS / ニーモニック由来 / 秘密鍵由来 共通）
+   アカウント切替（ニーモニック由来 / 秘密鍵由来）
 ============================================================ */
 export async function switchToAccount(id) {
   const acc = appState.accounts.find((a) => a.id === id);
@@ -103,36 +110,24 @@ export async function switchToAccount(id) {
 
   closeWebSocket();
 
-  // ノード/SDKがまだ準備できていなければここで準備する
-  // (アカウント追加・切替時は既に準備済みのことが多いので再選択しない)
   if (!appState.isSdkReady) {
     const isTestnet = appState.networkType === NetworkType.TESTNET;
     appState.NODE = await selectNode(isTestnet);
+    if (!appState.NODE) {
+      throw new Error("ノードに接続できません");
+    }
     await initSdk();
   }
 
-  if (acc.source === "sss") {
-    if (!window.SSS || !window.SSS.activePublicKey) {
-      throw new Error("SSS Extensionが接続されていません");
-    }
-    appState.authMode = "sss";
-    appState.currentPubKey = window.SSS.activePublicKey;
-    appState.localPrivateKeyHex = null;
-    appState.localKeyPair = null;
+  appState.authMode = "local";
+  appState.localPrivateKeyHex = acc.privateKeyHex;
 
-    const pub = new appState.sdkCore.PublicKey(appState.currentPubKey);
-    appState.currentAddress = appState.facade.createPublicAccount(pub).address;
-  } else {
-    appState.authMode = "local";
-    appState.localPrivateKeyHex = acc.privateKeyHex;
-
-    const keyPair = new appState.facade.static.KeyPair(
-      new appState.sdkCore.PrivateKey(acc.privateKeyHex)
-    );
-    appState.localKeyPair = keyPair;
-    appState.currentPubKey = keyPair.publicKey.toString();
-    appState.currentAddress = appState.facade.network.publicKeyToAddress(keyPair.publicKey);
-  }
+  const keyPair = new appState.facade.static.KeyPair(
+    new appState.sdkCore.PrivateKey(acc.privateKeyHex)
+  );
+  appState.localKeyPair = keyPair;
+  appState.currentPubKey = keyPair.publicKey.toString();
+  appState.currentAddress = appState.facade.network.publicKeyToAddress(keyPair.publicKey);
 
   appState.activeAccountId = id;
   acc.address = appState.currentAddress.toString();
@@ -149,84 +144,6 @@ export async function switchToAccount(id) {
   initLiveTx(address);
 
   await persistAccounts();
-}
-
-/* ============================================================
-   ネットワーク切り替え(Mainnet ⇔ Testnet)
-   SSS Extension接続アカウントでは使えない(SSSの署名対象ネットワークは
-   拡張機能側で固定されているため)。ローカル署名(ニーモニック/秘密鍵)
-   のアカウントのみ対応。同じ秘密鍵でも、ネットワークが変わると
-   アドレスの見え方(先頭の"N"/"T"等)が変わる。
-============================================================ */
-export async function switchNetwork(networkType) {
-  if (appState.authMode === "sss") {
-    throw new Error("SSS Extension接続アカウントではネットワークを切り替えられません");
-  }
-  if (!appState.localPrivateKeyHex) {
-    throw new Error("アカウントが未接続です");
-  }
-  if (appState.networkType === networkType) {
-    return; // 既に同じネットワーク
-  }
-
-  closeWebSocket();
-
-  appState.networkType = networkType;
-  const isTestnet = networkType === NetworkType.TESTNET;
-  appState.NODE = await selectNode(isTestnet);
-  await initSdk();
-
-  const keyPair = new appState.facade.static.KeyPair(
-    new appState.sdkCore.PrivateKey(appState.localPrivateKeyHex)
-  );
-  appState.localKeyPair = keyPair;
-  appState.currentPubKey = keyPair.publicKey.toString();
-  appState.currentAddress = appState.facade.network.publicKeyToAddress(keyPair.publicKey);
-
-  // 他アカウントのキャッシュ済みアドレスは別ネットワークのものになって
-  // しまうため無効化する(次に切り替えた時に再計算される)
-  appState.accounts.forEach((a) => {
-    if (a.source !== "sss") delete a.address;
-  });
-
-  const activeAcc = appState.accounts.find((a) => a.id === appState.activeAccountId);
-  if (activeAcc) activeAcc.address = appState.currentAddress.toString();
-
-  setText("network-label", isTestnet ? "Testnet" : "Mainnet");
-  const addressEl = document.getElementById("account-address");
-  if (addressEl) addressEl.textContent = appState.currentAddress.toString();
-
-  await refreshAccount();
-  await loadRecentTx();
-
-  const address2 = appState.currentAddress.toString();
-  initWebSocket(address2);
-  initLiveTx(address2);
-
-  await persistAccounts();
-}
-
-/* ============================================================
-   SSS Extension 接続
-============================================================ */
-export async function connectWithSSS() {
-  if (!window.SSS || !window.SSS.activePublicKey) {
-    throw new Error("SSS Extension とリンクしてください");
-  }
-
-  const pubKey = window.SSS.activePublicKey;
-  const networkType = Number(window.SSS.activeNetworkType);
-
-  if (!pubKey || ![NetworkType.MAINNET, NetworkType.TESTNET].includes(networkType)) {
-    throw new Error("SSSでアカウントを選択してください");
-  }
-
-  appState.networkType = networkType;
-
-  const id = "sss:" + pubKey.toUpperCase();
-  upsertAccount({ id, label: "SSS Extension", source: "sss", hidden: false });
-
-  await switchToAccount(id);
 }
 
 /* ============================================================
@@ -252,7 +169,7 @@ export async function loginWithMnemonic(mnemonicPhrase, networkType, accountInde
 }
 
 /* ============================================================
-   アカウント追加（ログイン済みの状態で使う。SSS利用中でも呼べる）
+   アカウント追加（ログイン済みの状態で使う）
 ============================================================ */
 function isDuplicatePrivateKey(privateKeyHex) {
   return appState.accounts.some(
@@ -325,7 +242,6 @@ export async function addAccountFromPrivateKey(privateKeyHex, label) {
 
 /* ============================================================
    アカウントの表示/非表示
-   非表示は削除ではなく一覧から隠すだけ(秘密鍵は保持されたまま)
 ============================================================ */
 export async function setAccountHidden(id, hidden) {
   const acc = appState.accounts.find((a) => a.id === id);
@@ -337,7 +253,6 @@ export async function setAccountHidden(id, hidden) {
 /* ============================================================
    暗号化ボールト (パスワード設定時のみ使用)
    AES-GCM + PBKDF2(210,000回)でアカウント一覧を暗号化してlocalStorageへ
-   (SSS由来のアカウントは秘密鍵を持たないため保存対象外)
 ============================================================ */
 async function deriveKeyFromPassword(password, saltBytes) {
   const enc = new TextEncoder();
@@ -360,26 +275,18 @@ function base64ToBytes(b64) {
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 }
 
-// パスワードから導出した鍵はセッション中だけメモリに保持し、
-// アカウント追加や非表示操作のたびにパスワード再入力を求めずに
-// 再暗号化・再保存できるようにする(平文パスワードは保持しない)
 let sessionSalt = null;
 let sessionKey = null;
 
 /*
   ボールトの状態:
-    "none"      … 何も保存されていない(ログアウト直後・SSSのみ利用等)
-    "plain"     … パスワード未設定。ログアウトするまでは平文でこの端末に保存し、
-                   次回リロード時は確認なしで自動ログインする
-    "encrypted" … パスワード設定済み。次回はパスワード入力が必要
-*/
-/*
-  ボールトの状態:
-    "none"      … 何も保存されていない(ログアウト直後・SSSのみ利用等)
-    "plain"     … パスワード未設定。sessionStorageに平文保存。
-                   リロードでは復帰するが、タブ/ウィンドウを閉じると消える
-    "encrypted" … パスワード設定済み。localStorageに暗号化保存。
-                   ブラウザを閉じても残り、次回はパスワード入力が必要
+    "none"      … 何も保存されていない(ログアウト直後、または未設定)
+    "encrypted" … パスワード設定済み。リロード後は必ずパスワード入力が必要
+
+  ※ パスワードを設定しない「あとで設定」は廃止した。
+    パスワードが設定されるまでは何も永続化しない(persistAccountsが無視する)ため、
+    ページのリロードや意図しない終了があった場合、その時点でパスワード未設定なら
+    アカウント作成からやり直しになる(＝毎回パスワード入力を必須にするため)。
 */
 export function getVaultMode() {
   const encRaw = localStorage.getItem(VAULT_KEY);
@@ -390,10 +297,6 @@ export function getVaultMode() {
       /* ignore */
     }
   }
-
-  const plainRaw = sessionStorage.getItem(VAULT_KEY);
-  if (plainRaw) return "plain";
-
   return "none";
 }
 
@@ -403,25 +306,18 @@ export function hasVault() {
 
 export function clearVault() {
   localStorage.removeItem(VAULT_KEY);
-  sessionStorage.removeItem(VAULT_KEY);
+  sessionStorage.removeItem(VAULT_KEY); // 過去バージョンの平文保存が残っていた場合の掃除
   sessionSalt = null;
   sessionKey = null;
 }
 
-/*
-  アカウント一覧の永続化。
-  ログアウトするまでは常に保存する:
-    - パスワード設定済み(sessionKey あり) → localStorageに暗号化して保存
-      (ブラウザを閉じても残る)
-    - 未設定 → sessionStorageに平文のまま保存
-      (タブ内でのリロードでは復帰するが、タブ/ウィンドウを閉じると消える。
-       秘密鍵を暗号化せずlocalStorageに残さないための措置)
-  持つべきアカウントが1つもなければ何も保存しない(削除もしない。SSSのみ利用中で
-  ローカルアカウントを一つも追加していない場合はこの状態のまま)。
-*/
 async function persistAccounts() {
-  const persistable = appState.accounts.filter((a) => a.source !== "sss");
+  const persistable = appState.accounts;
   if (persistable.length === 0) return;
+
+  // パスワード(暗号化キー)が未設定の間は何も永続化しない
+  // (パスワード設定は必須のため、設定されるまでは保存しない)
+  if (!sessionKey || !sessionSalt) return;
 
   const payload = {
     accounts: persistable,
@@ -429,25 +325,19 @@ async function persistAccounts() {
     activeAccountId: appState.activeAccountId,
   };
 
-  if (sessionKey && sessionSalt) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const plain = new TextEncoder().encode(JSON.stringify(payload));
-    const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, sessionKey, plain);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plain = new TextEncoder().encode(JSON.stringify(payload));
+  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, sessionKey, plain);
 
-    localStorage.setItem(
-      VAULT_KEY,
-      JSON.stringify({
-        encrypted: true,
-        salt: bufToBase64(sessionSalt),
-        iv: bufToBase64(iv),
-        cipher: bufToBase64(cipher),
-      })
-    );
-    // 平文版が残っていたら削除(パスワードを後から設定したケース)
-    sessionStorage.removeItem(VAULT_KEY);
-  } else {
-    sessionStorage.setItem(VAULT_KEY, JSON.stringify(payload));
-  }
+  localStorage.setItem(
+    VAULT_KEY,
+    JSON.stringify({
+      encrypted: true,
+      salt: bufToBase64(sessionSalt),
+      iv: bufToBase64(iv),
+      cipher: bufToBase64(cipher),
+    })
+  );
 }
 
 function restoreAccountsPayload(payload) {
@@ -465,19 +355,6 @@ function restoreAccountsPayload(payload) {
   return targetId;
 }
 
-/*
-  パスワード未設定(平文・sessionStorage)のボールトを、確認なしでそのまま復元する。
-  ページ読み込み時、getVaultMode() === "plain" のときに呼ぶ。
-*/
-export async function restorePlainVault() {
-  const raw = sessionStorage.getItem(VAULT_KEY);
-  if (!raw) throw new Error("保存されたアカウントがありません");
-
-  const payload = JSON.parse(raw);
-  const targetId = restoreAccountsPayload(payload);
-  await switchToAccount(targetId);
-}
-
 export async function saveVault(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await deriveKeyFromPassword(password, salt);
@@ -485,6 +362,7 @@ export async function saveVault(password) {
   sessionKey = key;
   await persistAccounts();
 }
+
 
 export async function unlockVault(password) {
   const raw = localStorage.getItem(VAULT_KEY);
@@ -514,83 +392,208 @@ export async function unlockVault(password) {
 }
 
 /* ============================================================
-   ローカル署名 (ニーモニック/秘密鍵ログイン時、SSS Extensionを使わない署名)
+   ローカル署名 (NIS1向け)
+
+   ⚠️ 経緯(重要): 何段階かの実機検証の結果、以下が判明した。
+     ・facade.signTransaction(keyPair, tx) が計算する署名は、
+       tx.serialize() の内容に対する署名として検証できない(自己検証false)
+     ・localKeyPair.sign(tx.serialize()) で得た署名は、
+       tx.serialize() に対しては正しく検証できる(自己検証true)
+     ・にもかかわらず、facade.transactionFactory.static.attachSignature(tx, signature)
+       が生成する announce用JSONの "data" フィールドに対しては、
+       localKeyPair.sign(tx.serialize()) の署名でも検証NGだった
+       (ノードから FAILURE_SIGNATURE_NOT_VERIFIABLE)
+   つまり attachSignature() が実際にPOSTする "data" の中身は、
+   tx.serialize() の生バイト列と(署名時点では)微妙に異なるらしい
+   ("recipient not found" エラーが直ったことから、"data" の構造自体は
+    正しいことは確認済み)。
+
+   そこで、以下の手順で確実な方法に切り替えている:
+     ① まず何らかの(仮の)署名でattachSignature()を呼び、
+        正しい構造の "data" フィールドを取得する
+        (dataの中身は署名の"値"には依存しないと考えられるため、
+         この時点の署名は暫定的なものでよい)
+     ② ①で得られた実際の "data" バイト列に対して、
+        動作確認済みの localKeyPair.sign() で署名し直す
+     ③ その "data" と ②の署名を組み合わせて最終ペイロードとする
 ============================================================ */
-export function signPayloadLocally(tx) {
-  const signature = appState.facade.signTransaction(appState.localKeyPair, tx);
-  // attachSignatureはアナウンス用のJSON文字列(payload)をそのまま返す
-  return appState.facade.transactionFactory.static.attachSignature(tx, signature);
+/* ============================================================
+   nem-sdk (NEM専用の実績あるライブラリ) の遅延読み込み
+   ⚠️ 経緯(重要): 実機検証の結果、symbol-sdk v3 の NemFacade.signTransaction()
+   および KeyPair.sign() は、自己検証(同じSDK内でのsign→verify)こそ
+   成功するものの、実際のNIS1ネットワークには "FAILURE_SIGNATURE_NOT_VERIFIABLE"
+   として一貫して拒否されることが判明した。NEMは歴史的に「KECCAK_REVERSED_KEY」
+   という独自の署名方式(NIS1)を使っており、symbol-sdkの内部実装がこれを
+   正しく再現できていない可能性が高い(symbol-sdkは元々Symbol/Catapult用に
+   SHA-512ベースへ移行した経緯があるため)。
+   そのため、署名処理だけは実績のあるNEM専用ライブラリ nem-sdk に切り替える。
+   トランザクションの構造自体(recipient/amount/message/fee等)は
+   symbol-sdkで組み立てたもの(実機で構造は正しいと確認済み)をそのまま使い、
+   「dataバイト列に対する署名」の計算だけをnem-sdkに任せる。
+============================================================ */
+let _nemSdkPromise = null;
+export function loadNemSdk() {
+  if (!_nemSdkPromise) {
+    _nemSdkPromise = import("https://esm.sh/nem-sdk@1.6.11").then((m) => m.default || m);
+  }
+  return _nemSdkPromise;
+}
+
+/* ============================================================
+   ローカル署名 (NIS1向け)
+   ① symbol-sdkの attachSignature() で、正しい構造の "data" を取得する
+      (dataの中身は署名の"値"には依存しないため、ここで使う署名は暫定的なものでよい)
+   ② その "data" に対して、nem-sdkで正しく署名し直す
+   ③ 正しい "data" と、nem-sdkによる正しい署名を組み合わせて最終ペイロードとする
+============================================================ */
+export async function buildNemAnnouncePayload(tx) {
+  // ① 仮署名でattachSignature()を呼び、正しい"data"を取得する
+  const probeSignature = appState.localKeyPair.sign(tx.serialize());
+  const probePayload = JSON.parse(
+    appState.facade.transactionFactory.static.attachSignature(tx, probeSignature)
+  );
+
+  if (!probePayload.data) {
+    throw new Error("attachSignatureの出力にdataフィールドがありません(SDKの仕様が想定と異なる可能性があります)");
+  }
+
+  // ② nem-sdkで署名し直す
+  const nem = await loadNemSdk();
+  const nemKeyPair = nem.crypto.keyPair.create(appState.localPrivateKeyHex);
+
+  // ------------------------------------------------------------
+  // 診断ログ(送金には影響しない)
+  // symbol-sdkとnem-sdkで導出される公開鍵が一致するかを確認しておく
+  // (もし食い違う場合、アドレス導出の方式自体に差異がある可能性がある)
+  // ------------------------------------------------------------
+  try {
+    const nemPublicKeyHex = nemKeyPair.publicKey.toString().toUpperCase();
+    const symbolPublicKeyHex = (appState.currentPubKey || "").toUpperCase();
+    console.log("[diagnostic] nem-sdk公開鍵:", nemPublicKeyHex);
+    console.log("[diagnostic] symbol-sdk公開鍵:", symbolPublicKeyHex);
+    console.log("[diagnostic] 公開鍵が一致:", nemPublicKeyHex === symbolPublicKeyHex);
+    if (nemPublicKeyHex !== symbolPublicKeyHex) {
+      console.warn("[警告] nem-sdkとsymbol-sdkで導出された公開鍵が一致していません。");
+    }
+  } catch (e) {
+    console.warn("[diagnostic] 公開鍵比較に失敗しました:", e);
+  }
+
+  const signatureHex = nemKeyPair.sign(probePayload.data).toString();
+  console.log("[diagnostic] nem-sdkによる署名(hex文字列):", signatureHex, "型:", typeof signatureHex, "長さ:", signatureHex.length);
+
+  // ③ 正しい"data"と、nem-sdkによる正しい署名を組み合わせる
+  const jsonPayload = JSON.stringify({ data: probePayload.data, signature: signatureHex });
+  console.log("[diagnostic] 最終announceペイロード:", jsonPayload);
+
+  return { jsonPayload, signatureHex };
 }
 
 export function encryptMessageLocally(recipientPubKeyHex, plainText) {
-  const encoder = new appState.sdkSymbol.MessageEncoder(appState.localKeyPair);
+  const encoder = new appState.sdkNem.MessageEncoder(appState.localKeyPair);
   const recipientPub = new appState.sdkCore.PublicKey(recipientPubKeyHex);
   return encoder.encode(recipientPub, new TextEncoder().encode(plainText));
 }
 
 /* ============================================================
    署名 → アナウンス（共通処理）
-   SSS Extension / ローカル署名の両方に対応。
-   ネームスペース登録・モザイク作成など、送金・ハーベスト以外の
-   機能からも共通で使う。
-============================================================ */
-/* ============================================================
-   署名のみ行い、アナウンスはしない(マルチシグのアグリゲートボンデッド等、
-   ハッシュロックを挟む多段階フローで使う)
-============================================================ */
-export async function signTxOnly(tx) {
-  let jsonPayload;
-  let signedBytes;
-
-  if (appState.authMode === "local") {
-    jsonPayload = signPayloadLocally(tx);
-    signedBytes = appState.sdkCore.utils.hexToUint8(JSON.parse(jsonPayload).payload);
-  } else {
-    const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
-
-    window.SSS.setTransactionByPayload(payload);
-    const signed = await window.SSS.requestSign();
-    if (!signed?.payload) {
-      throw new Error("SSS署名に失敗しました");
-    }
-
-    jsonPayload = JSON.stringify({ payload: signed.payload });
-    signedBytes = appState.sdkCore.utils.hexToUint8(signed.payload);
-  }
-
-  return { jsonPayload, signedBytes };
-}
-
-/* ============================================================
-   署名 → アナウンス（共通処理）
-   SSS Extension / ローカル署名の両方に対応。
-   ネームスペース登録・モザイク作成など、送金・ハーベスト以外の
-   機能からも共通で使う。
+   送金・ハーベスト・ネームスペース登録・モザイク作成・マルチシグなど、
+   トランザクションを送る全機能から共通で使う。
 ============================================================ */
 export async function signAndAnnounceTx(tx) {
-  const { jsonPayload: announceBody, signedBytes } = await signTxOnly(tx);
+  const { jsonPayload } = await buildNemAnnouncePayload(tx);
 
-  const res = await fetch(new URL("/transactions", appState.NODE), {
-    method: "PUT",
+  const res = await fetch(new URL("/transaction/announce", appState.NODE), {
+    method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: announceBody,
+    body: jsonPayload,
   });
 
   const result = await res.json();
   console.log("announce result:", result);
 
-  if (!res.ok) {
+  // NIS1は code:1 (SUCCESS) 以外はエラー
+  if (!res.ok || (result.code != null && result.code !== 1)) {
     throw new Error(result.message ?? "アナウンス失敗");
   }
 
-  const signedTx = appState.facade.transactionFactory.static.deserialize(signedBytes);
-  return appState.facade.hashTransaction(signedTx).toString();
+  // ハッシュはノードのレスポンスからそのまま取得する
+  // (facade.hashTransaction(tx)はsymbol-sdk側の署名を前提にしている可能性があり、
+  //  今回nem-sdkで署名した実際のトランザクションのハッシュと一致しない懸念があるため)
+  const hash = result.transactionHash?.data ?? result.transactionHash ?? null;
+  return hash || "(ハッシュ取得失敗、announce自体は成功しています)";
 }
 
 /* ============================================================
-   セッション状態のリセット(共通処理)
+   ログイン画面(パスワード入力画面)に戻る(保存データは削除しない)
+   ログアウトと違い、パスワードで暗号化して保存済みのアカウント情報は
+   そのまま残す。単に今のセッションを終了して、パスワード入力画面
+   (保存データが無ければ、やむを得ずようこそ画面)に戻すだけの処理。
+   実際にどちらの画面を表示するかは、呼び出し側で hasVault() を見て判断する。
 ============================================================ */
-function resetSessionState() {
+export function returnToLoginScreen() {
+  closeWebSocket();
+  currentMnemonicPhrase = null;
+
+  appState.authMode = null;
+  appState.currentPubKey = null;
+  appState.currentAddress = null;
+  appState.localPrivateKeyHex = null;
+  appState.localKeyPair = null;
+  appState.NODE = null;
+  appState.isSdkReady = false;
+  appState.accounts = [];
+  appState.activeAccountId = null;
+  // appState.networkType はあえてクリアしない
+  // (次のログイン時にネットワーク選択の手間を減らすため)
+}
+
+/* ============================================================
+   ネットワーク切り替え(メインネット⇔テストネット)
+   接続可能なHTTPS対応ノードが無い場合は何もせず false を返す
+   (呼び出し側でアラート表示する想定)。
+   同じ秘密鍵でも、ネットワークが変わるとアドレスの見た目が変わるため、
+   全アカウントのアドレス表示を再計算してから保存し直す。
+============================================================ */
+export async function switchNetwork(targetNetworkType) {
+  const isTestnet = targetNetworkType === NetworkType.TESTNET;
+  const node = await selectNode(isTestnet);
+  if (!node) {
+    return false;
+  }
+
+  closeWebSocket();
+
+  appState.networkType = targetNetworkType;
+  appState.NODE = node;
+  appState.isSdkReady = false;
+  await initSdk();
+
+  // 保存済み全アカウントのアドレス表示を、新しいネットワークで再計算する
+  for (const acc of appState.accounts) {
+    if (!acc.privateKeyHex) continue;
+    try {
+      const keyPair = new appState.facade.static.KeyPair(
+        new appState.sdkCore.PrivateKey(acc.privateKeyHex)
+      );
+      acc.address = appState.facade.network.publicKeyToAddress(keyPair.publicKey).toString();
+    } catch (e) {
+      console.warn("アドレス再計算失敗:", acc.id, e);
+    }
+  }
+
+  if (appState.activeAccountId) {
+    await switchToAccount(appState.activeAccountId);
+  }
+
+  return true;
+}
+
+/* ============================================================
+   ログアウト
+============================================================ */
+export function logout() {
+  clearVault();
   closeWebSocket();
   currentMnemonicPhrase = null;
 
@@ -607,47 +610,8 @@ function resetSessionState() {
 }
 
 /* ============================================================
-   ログアウト
-   保存済みアカウント(パスワード付きボールト)も削除するため、
-   次回は自動ログインできず、必ずSSS接続かニーモニック/秘密鍵の
-   再入力が必要になる
+   マルチシグ連署用の署名(NIS1の MultisigSignatureTransaction はそれ自体が
+   独立したトランザクションであり、Symbolのように「ハッシュへの署名」だけを
+   別送する仕組みではない。そのため multisig.js 側で
+   MultisigSignatureTransaction を組み立てて signAndAnnounceTx で送信する)
 ============================================================ */
-export function logout() {
-  clearVault();
-  resetSessionState();
-}
-
-/* ============================================================
-   ロック
-   ログアウトと違い、保存済みボールト(localStorage)は削除しない。
-   次回はパスワード入力(ロック解除画面)だけで復帰できる。
-   新規作成 / ニーモニックインポートでログインした場合(authMode==="local")
-   のみ使う想定。
-============================================================ */
-export function lockSession() {
-  sessionSalt = null;
-  sessionKey = null;
-  resetSessionState();
-}
-
-/* ============================================================
-   保留中のアグリゲートボンデッドTxへの連署(マルチシグ署名)
-   Symbol の連署は「トランザクションハッシュへの署名」のみで完結する。
-   ※ SSS Extensionにはハッシュへの署名を依頼する公開APIが無いため、
-     現状はローカル署名(ニーモニック/秘密鍵ログイン)のみ対応。
-============================================================ */
-export function cosignTransactionHash(transactionHashHex) {
-  if (appState.authMode !== "local") {
-    throw new Error("SSS Extensionでは連署に対応していません（ニーモニック/秘密鍵ログインでご利用ください）");
-  }
-
-  const hashBytes = appState.sdkCore.utils.hexToUint8(transactionHashHex);
-  const signature = appState.localKeyPair.sign(hashBytes);
-
-  return {
-    parentHash: transactionHashHex,
-    signature: appState.sdkCore.utils.uint8ToHex(signature.bytes ?? signature),
-    signerPublicKey: appState.currentPubKey,
-    version: "0",
-  };
-}
