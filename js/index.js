@@ -55,6 +55,9 @@ import {
   createMosaic,
   setMosaicAlias,
   fetchOwnedMosaicIds,
+  estimateMosaicCreationFee,
+  changeMosaicSupply,
+  fetchMosaicDetail,
 } from "./mosaic.js";
 import { setMetadata, loadOwnMetadataList } from "./metadata.js";
 import {
@@ -114,6 +117,7 @@ window.addEventListener("load", async () => {
   const advancedPage = document.getElementById("advanced-page");
   const namespacePage = document.getElementById("namespace-page");
   const mosaicPage = document.getElementById("mosaic-page");
+  const mosaicSupplyPage = document.getElementById("mosaic-supply-page");
   const metadataPage = document.getElementById("metadata-page");
   const multisigMenuPage = document.getElementById("multisig-menu-page");
   const multisigSettingsPage = document.getElementById("multisig-settings-page");
@@ -470,6 +474,7 @@ window.addEventListener("load", async () => {
     showPage(mosaicPage);
     await loadOwnedMosaicsWithAlias();
     await populateMosaicNamespaceSelect();
+    updateMosaicFeeEstimate();
   });
 
   // ============================
@@ -1471,31 +1476,167 @@ window.addEventListener("load", async () => {
     }
   });
 
-  document.getElementById("create-mosaic-btn")?.addEventListener("click", async () => {
-    const divisibility = parseInt(document.getElementById("mosaic-divisibility").value, 10) || 0;
+  function readMosaicFormOptions() {
+    const divisibility = parseInt(document.getElementById("mosaic-divisibility").value, 10) || 1;
+    const isUnlimited = document.getElementById("mosaic-duration-mode").value === "unlimited";
     const durationBlocks = parseInt(document.getElementById("mosaic-duration").value, 10) || 0;
     const initialSupply = parseFloat(document.getElementById("mosaic-initial-supply").value) || 0;
-    const transferable = document.getElementById("mosaic-transferable").checked;
     const supplyMutable = document.getElementById("mosaic-supply-mutable").checked;
+    const transferable = document.getElementById("mosaic-transferable").checked;
     const restrictable = document.getElementById("mosaic-restrictable").checked;
+    const revokable = document.getElementById("mosaic-revokable").checked;
     const linkNamespaceIdHex = document.getElementById("mosaic-link-namespace-select").value || null;
 
+    return {
+      divisibility,
+      isUnlimited,
+      durationBlocks,
+      supplyMutable,
+      transferable,
+      restrictable,
+      revokable,
+      initialSupply,
+      linkNamespaceIdHex,
+    };
+  }
+
+  function updateMosaicFeeEstimate() {
+    const el = document.getElementById("mosaic-fee-estimate");
+    if (!el) return;
+    try {
+      const { feeXym } = estimateMosaicCreationFee(readMosaicFormOptions());
+      el.textContent = `約 ${feeXym} XYM`;
+    } catch (e) {
+      el.textContent = "---";
+    }
+  }
+
+  document.getElementById("mosaic-duration-mode")?.addEventListener("change", e => {
+    const row = document.getElementById("mosaic-duration-row");
+    row.style.display = e.target.value === "limited" ? "block" : "none";
+    updateMosaicFeeEstimate();
+  });
+
+  document.getElementById("mosaic-duration-calc-btn")?.addEventListener("click", () => {
+    const panel = document.getElementById("mosaic-duration-presets");
+    panel.style.display = panel.style.display === "none" ? "flex" : "none";
+  });
+
+  document.getElementById("mosaic-duration-presets")?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-days]");
+    if (!btn) return;
+    const days = parseInt(btn.dataset.days, 10);
+    document.getElementById("mosaic-duration").value = days * 2880;
+    document.getElementById("mosaic-duration-presets").style.display = "none";
+    updateMosaicFeeEstimate();
+  });
+
+  document.querySelector('#mosaic-page .card')?.addEventListener("input", updateMosaicFeeEstimate);
+  document.querySelector('#mosaic-page .card')?.addEventListener("change", updateMosaicFeeEstimate);
+
+  document.getElementById("create-mosaic-btn")?.addEventListener("click", async () => {
     setStatus("mosaic-create-status", "作成中...");
     try {
-      const hash = await createMosaic({
-        divisibility,
-        durationBlocks,
-        supplyMutable,
-        transferable,
-        restrictable,
-        initialSupply,
-        linkNamespaceIdHex,
-      });
+      const hash = await createMosaic(readMosaicFormOptions());
       setStatus("mosaic-create-status", `✅ 作成リクエストを送信しました。Hash: ${hash}`, "success");
       await loadOwnedMosaicsWithAlias();
     } catch (e) {
       console.error("createMosaic error:", e);
       setStatus("mosaic-create-status", e.message || "作成に失敗しました。", "error");
+    }
+  });
+
+  // ============================
+  // モザイク供給量変更
+  // ============================
+  document.getElementById("goto-mosaic-supply-btn")?.addEventListener("click", async () => {
+    showPage(mosaicSupplyPage);
+    setStatus("mosaic-supply-status", "", "default");
+    document.getElementById("mosaic-supply-current").textContent = "---";
+    document.getElementById("mosaic-supply-new").textContent = "---";
+    document.getElementById("mosaic-supply-amount").value = "0";
+
+    const select = document.getElementById("mosaic-supply-target-select");
+    select.innerHTML = `<option value="">-- 読み込み中... --</option>`;
+    try {
+      const ids = await fetchOwnedMosaicIds();
+      select.innerHTML = ids.length
+        ? `<option value="">-- モザイクを選択 --</option>` + ids.map(id => `<option value="${id}">${id}</option>`).join("")
+        : `<option value="">-- 作成したモザイクがありません --</option>`;
+    } catch (e) {
+      console.warn("モザイク候補の取得に失敗しました", e);
+      select.innerHTML = `<option value="">-- 取得に失敗しました --</option>`;
+    }
+  });
+
+  let mosaicSupplyDetail = null;
+
+  function updateMosaicSupplyNewValue() {
+    if (!mosaicSupplyDetail) return;
+    const direction = document.getElementById("mosaic-supply-direction").value;
+    const amount = parseFloat(document.getElementById("mosaic-supply-amount").value) || 0;
+    const divisibility = Number(mosaicSupplyDetail.divisibility ?? 0);
+    const currentSupply = Number(mosaicSupplyDetail.supply) / 10 ** divisibility;
+    const newSupply = direction === "decrease" ? currentSupply - amount : currentSupply + amount;
+    document.getElementById("mosaic-supply-new").textContent = newSupply.toLocaleString("ja-JP", {
+      maximumFractionDigits: divisibility,
+    });
+  }
+
+  document.getElementById("mosaic-supply-target-select")?.addEventListener("change", async e => {
+    const mosaicIdHex = e.target.value;
+    mosaicSupplyDetail = null;
+    document.getElementById("mosaic-supply-current").textContent = "---";
+    document.getElementById("mosaic-supply-new").textContent = "---";
+    if (!mosaicIdHex) return;
+
+    try {
+      mosaicSupplyDetail = await fetchMosaicDetail(mosaicIdHex);
+      const divisibility = Number(mosaicSupplyDetail.divisibility ?? 0);
+      const currentSupply = Number(mosaicSupplyDetail.supply) / 10 ** divisibility;
+      document.getElementById("mosaic-supply-current").textContent = currentSupply.toLocaleString("ja-JP", {
+        maximumFractionDigits: divisibility,
+      });
+      updateMosaicSupplyNewValue();
+    } catch (e) {
+      console.error("fetchMosaicDetail error:", e);
+      setStatus("mosaic-supply-status", "モザイク情報の取得に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("mosaic-supply-direction")?.addEventListener("change", updateMosaicSupplyNewValue);
+  document.getElementById("mosaic-supply-amount")?.addEventListener("input", updateMosaicSupplyNewValue);
+
+  document.getElementById("mosaic-supply-save-btn")?.addEventListener("click", async () => {
+    const mosaicIdHex = document.getElementById("mosaic-supply-target-select").value;
+    const direction = document.getElementById("mosaic-supply-direction").value;
+    const amount = parseFloat(document.getElementById("mosaic-supply-amount").value) || 0;
+
+    if (!mosaicIdHex) {
+      setStatus("mosaic-supply-status", "対象モザイクを選択してください。", "error");
+      return;
+    }
+    if (!mosaicSupplyDetail) {
+      setStatus("mosaic-supply-status", "モザイク情報の取得が完了していません。", "error");
+      return;
+    }
+    if (amount <= 0) {
+      setStatus("mosaic-supply-status", "供給量変更単位を入力してください。", "error");
+      return;
+    }
+
+    setStatus("mosaic-supply-status", "保存中...");
+    try {
+      const hash = await changeMosaicSupply({
+        mosaicIdHex,
+        direction,
+        amount,
+        divisibility: Number(mosaicSupplyDetail.divisibility ?? 0),
+      });
+      setStatus("mosaic-supply-status", `✅ 供給量変更リクエストを送信しました。Hash: ${hash}`, "success");
+    } catch (e) {
+      console.error("changeMosaicSupply error:", e);
+      setStatus("mosaic-supply-status", e.message || "保存に失敗しました。", "error");
     }
   });
 
@@ -1724,6 +1865,7 @@ window.addEventListener("load", async () => {
   document.getElementById("back-account-advanced")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-advanced-namespace")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-advanced-mosaic")?.addEventListener("click", () => showPage(advancedPage));
+  document.getElementById("back-mosaic-supply")?.addEventListener("click", () => showPage(mosaicPage));
   document.getElementById("back-advanced-metadata")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-advanced-multisig-menu")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-multisig-menu-settings")?.addEventListener("click", () => showPage(multisigMenuPage));

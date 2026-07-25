@@ -1,5 +1,5 @@
 // mosaic.js
-// モザイクの作成・自分が保有するモザイク一覧(ネームスペースとのリンク状況付き)の取得
+// モザイクの作成・供給量変更・自分が保有するモザイク一覧(ネームスペースとのリンク状況付き)の取得
 
 import { appState } from "./config.js";
 import { setStatus } from "./ui.js";
@@ -7,11 +7,9 @@ import { formatMosaicAmount } from "./utils.js";
 import { signAndAnnounceTx } from "./auth.js";
 import { fetchOwnedNamespaceOptions } from "./namespace.js";
 
-/* ============================================================
-   保有モザイク一覧 + ネームスペースリンク状況
-   (account.js の appState.mosaicInfo をベースに、
-    まだ解決していないモザイクのエイリアス名を追加取得する)
-============================================================ */
+// Symbolのブロック目標間隔(秒)。メインネット/テストネットともに30秒。
+const BLOCK_TARGET_SECONDS = 30;
+const BLOCKS_PER_DAY = (24 * 60 * 60) / BLOCK_TARGET_SECONDS;
 
 export async function fetchOwnedMosaicIds() {
   const address = appState.currentAddress.toString();
@@ -22,11 +20,22 @@ export async function fetchOwnedMosaicIds() {
 }
 
 /* ============================================================
+   対象モザイクの詳細(供給量・可分性など)を取得
+============================================================ */
+export async function fetchMosaicDetail(mosaicIdHex) {
+  const res = await fetch(`${appState.NODE}/mosaics/${mosaicIdHex.toUpperCase()}`);
+  if (!res.ok) throw new Error("モザイク情報の取得に失敗しました");
+  const json = await res.json();
+  return json.mosaic;
+}
+
+/* ============================================================
    自分が作成した(オーナーになっている)モザイク一覧 + ネームスペースリンク状況
    保有量(mosaicInfo)ではなく、/mosaics?ownerAddress= で
    「自分が定義者になっているモザイク」を取得する。
    リンクされていないモザイクには、その場でネームスペースを
-   選んでリンクできる操作を表示する。
+   選んでリンクできる操作を表示する。有効期限がある場合は
+   残り日数の目安も表示する。
 ============================================================ */
 export async function loadOwnedMosaicsWithAlias() {
   const el = document.getElementById("owned-mosaic-list");
@@ -37,9 +46,14 @@ export async function loadOwnedMosaicsWithAlias() {
   try {
     const address = appState.currentAddress.toString();
     const params = new URLSearchParams({ ownerAddress: address, pageSize: 100 });
-    const res = await fetch(`${appState.NODE}/mosaics?${params}`);
+
+    const [res, chainInfo] = await Promise.all([
+      fetch(`${appState.NODE}/mosaics?${params}`),
+      fetch(`${appState.NODE}/chain/info`).then((r) => r.json()).catch(() => null),
+    ]);
     const json = await res.json();
     const mosaicItems = json.data ?? [];
+    const currentHeight = chainInfo ? Number(chainInfo.height) : null;
 
     if (mosaicItems.length === 0) {
       el.innerHTML = `<div style="color:#94a3b8;">作成したモザイクはありません</div>`;
@@ -85,10 +99,26 @@ export async function loadOwnedMosaicsWithAlias() {
 
         const flags = m.flags ?? 0;
         const flagLabels = [];
-        if (flags & 0x1) flagLabels.push("supplyMutable");
-        if (flags & 0x2) flagLabels.push("transferable");
-        if (flags & 0x4) flagLabels.push("restrictable");
-        if (flags & 0x8) flagLabels.push("revokable");
+        if (flags & 0x1) flagLabels.push("供給量変更可能");
+        if (flags & 0x2) flagLabels.push("第三者へ譲渡可能");
+        if (flags & 0x4) flagLabels.push("制限設定可能");
+        if (flags & 0x8) flagLabels.push("取り消し可能");
+
+        const duration = Number(m.duration ?? 0);
+        const startHeight = Number(m.startHeight ?? 0);
+        let expiryHtml = "有効期限: 無期限";
+        if (duration > 0) {
+          const endHeight = startHeight + duration;
+          let remaining = "";
+          if (currentHeight != null) {
+            const remainingBlocks = endHeight - currentHeight;
+            remaining =
+              remainingBlocks > 0
+                ? `（あと${Math.round(remainingBlocks / BLOCKS_PER_DAY)}日）`
+                : "（有効期限切れ）";
+          }
+          expiryHtml = `有効期限: ブロック高${endHeight}${remaining}`;
+        }
 
         const linkControlHtml = alias
           ? `
@@ -113,6 +143,7 @@ export async function loadOwnedMosaicsWithAlias() {
             <div>モザイクID: ${id}</div>
             <div>供給量: ${supply}</div>
             <div>可分性: ${divisibility}</div>
+            <div>${expiryHtml}</div>
             <div>フラグ: ${flagLabels.length ? flagLabels.join(", ") : "なし"}</div>
             <div>${alias ? `🔗 ネームスペース: ${alias.name}` : "ネームスペースとのリンクなし"}</div>
             ${linkControlHtml}
@@ -171,14 +202,18 @@ export async function linkNamespaceToMosaic(mosaicIdHex, namespaceIdHex) {
 }
 
 /* ============================================================
-   モザイク作成
+   モザイク作成トランザクションの組み立て(署名前・共通処理)
+   手数料試算(estimateMosaicCreationFee)と実際の作成(createMosaic)
+   の両方から使う。
 ============================================================ */
-export async function createMosaic({
+function buildMosaicCreationTx({
   divisibility,
+  isUnlimited,
   durationBlocks,
   supplyMutable,
   transferable,
   restrictable,
+  revokable,
   initialSupply,
   linkNamespaceIdHex,
 }) {
@@ -198,21 +233,19 @@ export async function createMosaic({
   if (supplyMutable) flagValue += models.MosaicFlags.SUPPLY_MUTABLE.value;
   if (transferable) flagValue += models.MosaicFlags.TRANSFERABLE.value;
   if (restrictable) flagValue += models.MosaicFlags.RESTRICTABLE.value;
+  if (revokable) flagValue += models.MosaicFlags.REVOKABLE.value;
   const flags = new models.MosaicFlags(flagValue);
 
   const definitionDescriptor = new descriptors.MosaicDefinitionTransactionV1Descriptor(
     mosaicId,
-    new models.BlockDuration(BigInt(durationBlocks)),
+    new models.BlockDuration(isUnlimited ? 0n : BigInt(durationBlocks || 0)),
     nonce,
     flags,
     divisibility
   );
 
   const embedded = [
-    appState.facade.createEmbeddedTransactionFromTypedDescriptor(
-      definitionDescriptor,
-      appState.currentPubKey
-    ),
+    appState.facade.createEmbeddedTransactionFromTypedDescriptor(definitionDescriptor, appState.currentPubKey),
   ];
 
   if (initialSupply > 0) {
@@ -222,10 +255,7 @@ export async function createMosaic({
       models.MosaicSupplyChangeAction.INCREASE
     );
     embedded.push(
-      appState.facade.createEmbeddedTransactionFromTypedDescriptor(
-        supplyDescriptor,
-        appState.currentPubKey
-      )
+      appState.facade.createEmbeddedTransactionFromTypedDescriptor(supplyDescriptor, appState.currentPubKey)
     );
   }
 
@@ -237,10 +267,7 @@ export async function createMosaic({
       models.AliasAction.LINK
     );
     embedded.push(
-      appState.facade.createEmbeddedTransactionFromTypedDescriptor(
-        aliasDescriptor,
-        appState.currentPubKey
-      )
+      appState.facade.createEmbeddedTransactionFromTypedDescriptor(aliasDescriptor, appState.currentPubKey)
     );
   }
 
@@ -249,8 +276,51 @@ export async function createMosaic({
     embedded
   );
 
-  const tx = appState.facade.createTransactionFromTypedDescriptor(
+  return appState.facade.createTransactionFromTypedDescriptor(
     aggregateDescriptor,
+    appState.currentPubKey,
+    appState.feeMultiplier ?? 100,
+    60 * 60
+  );
+}
+
+/* ============================================================
+   モザイク作成の推定手数料(XYM)を試算する
+   実際に送信はしない。tx.size(byte) × feeMultiplier で計算。
+============================================================ */
+export function estimateMosaicCreationFee(options) {
+  const tx = buildMosaicCreationTx(options);
+  const sizeBytes = tx.size;
+  const feeMicroXym = sizeBytes * (appState.feeMultiplier ?? 100);
+  return {
+    sizeBytes,
+    feeXym: (feeMicroXym / 1_000_000).toLocaleString("ja-JP", { maximumFractionDigits: 6 }),
+  };
+}
+
+/* ============================================================
+   モザイク作成
+============================================================ */
+export async function createMosaic(options) {
+  const tx = buildMosaicCreationTx(options);
+  return await signAndAnnounceTx(tx);
+}
+
+/* ============================================================
+   モザイク供給量変更(既存モザイクの供給量を増減する)
+   ※ supplyMutable フラグ付きで作成されたモザイクのみ変更可能
+============================================================ */
+export async function changeMosaicSupply({ mosaicIdHex, direction, amount, divisibility }) {
+  const { descriptors, models } = appState.sdkSymbol;
+
+  const supplyDescriptor = new descriptors.MosaicSupplyChangeTransactionV1Descriptor(
+    new models.UnresolvedMosaicId(BigInt("0x" + mosaicIdHex.toUpperCase())),
+    new models.Amount(BigInt(Math.floor(amount * 10 ** divisibility))),
+    direction === "decrease" ? models.MosaicSupplyChangeAction.DECREASE : models.MosaicSupplyChangeAction.INCREASE
+  );
+
+  const tx = appState.facade.createTransactionFromTypedDescriptor(
+    supplyDescriptor,
     appState.currentPubKey,
     appState.feeMultiplier ?? 100,
     60 * 60
