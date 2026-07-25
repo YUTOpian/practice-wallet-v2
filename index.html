@@ -566,204 +566,192 @@
       <h2>ネームスペース</h2>
       <button id="back-advanced-namespace" class="button-primary">← 戻る</button>
 
-      <div class="wallet-tabs">
-        <div id="ns-tab-owned" class="wallet-tab active">保有ネームスペース一覧</div>
-        <div id="ns-tab-create" class="wallet-tab">ネームスペースの作成と更新</div>
-        <div id="ns-tab-link" class="wallet-tab">リンクと解除</div>
+      <h3>ルートネームスペースの作成・更新（延長）</h3>
+      <p style="font-size:13px;color:#94a3b8;">
+        既に自分が所有している名前を指定すると、有効期間の延長（更新）になります。
+        サブネームスペースはルートと同じ期間を共有するため、個別の更新は不要です。
+      </p>
+      <input id="root-namespace-name" class="input-box" placeholder="ネームスペース名 (例: my_namespace)">
+      <input id="root-namespace-duration" class="input-box" type="number" min="1" placeholder="有効期間(ブロック数)　例: 86400(約30日目安)">
+
+      <div id="root-namespace-duration-presets" class="settings-menu" style="display:none; margin-bottom:12px;">
+        <button type="button" class="settings-menu-item" data-days="30">30日（86,400ブロック）</button>
+        <button type="button" class="settings-menu-item" data-days="90">90日（259,200ブロック）</button>
+        <button type="button" class="settings-menu-item" data-days="180">180日（518,400ブロック）</button>
+        <button type="button" class="settings-menu-item" data-days="365">365日（1,051,200ブロック）</button>
       </div>
 
-      <!-- 保有ネームスペース一覧 -->
-      <div id="ns-content-owned">
-        <div id="namespace-list">読み込み中...</div>
+      <div style="display:flex; gap:8px;">
+        <button id="root-namespace-calc-btn" class="button-primary">有効期間の計算</button>
+        <button id="register-root-namespace-btn" class="button-primary">登録・更新する</button>
       </div>
+      <div id="root-namespace-status"></div>
 
-      <!-- ネームスペースの作成と更新 -->
-      <div id="ns-content-create" style="display:none;">
-        <h3>ルートネームスペースの作成・更新（延長）</h3>
-        <p style="font-size:13px;color:#94a3b8;">
-          既に自分が所有している名前を指定すると、有効期間の延長（更新）になります。
-          サブネームスペースはルートと同じ期間を共有するため、個別の更新は不要です。
-        </p>
-        <input id="root-namespace-name" class="input-box" placeholder="ネームスペース名 (例: my_namespace)">
-        <input id="root-namespace-duration" class="input-box" type="number" min="1" placeholder="有効期間(ブロック数)　例: 86400(約30日目安)">
+      <hr>
 
-        <div id="root-namespace-duration-presets" class="settings-menu" style="display:none; margin-bottom:12px;">
-          <button type="button" class="settings-menu-item" data-days="30">30日（86,400ブロック）</button>
-          <button type="button" class="settings-menu-item" data-days="90">90日（259,200ブロック）</button>
-          <button type="button" class="settings-menu-item" data-days="180">180日（518,400ブロック）</button>
-          <button type="button" class="settings-menu-item" data-days="365">365日（1,051,200ブロック）</button>
-        </div>
+      <h3>サブネームスペースを作成</h3>
+      <p style="font-size:13px;color:#94a3b8;">
+        親は自分が保有するネームスペースから選択してください（最大3階層まで。レベル3のネームスペースは親にできません）。
+      </p>
+      <select id="sub-namespace-parent-select" class="input-box">
+        <option value="">-- 読み込み中... --</option>
+      </select>
+      <input id="sub-namespace-name" class="input-box" placeholder="サブネームスペース名">
+      <button id="register-sub-namespace-btn" class="button-primary">サブネームスペースを登録</button>
+      <div id="sub-namespace-status"></div>
 
-        <p style="font-size:13px;color:#94a3b8;">推定手数料: <span id="root-namespace-fee-estimate">---</span></p>
+      <hr>
 
-        <div style="display:flex; gap:8px;">
-          <button id="root-namespace-calc-btn" class="button-primary">有効期間の計算</button>
-          <button id="register-root-namespace-btn" class="button-primary">登録・更新する</button>
-        </div>
-        <div id="root-namespace-status"></div>
+      <h3>モザイクへのリンク・解除</h3>
+      <p style="font-size:13px;color:#94a3b8;">
+        モザイクにリンクできるのは、そのモザイクの作成者(オーナー)のみです。
+      </p>
+      <select id="ns-link-mosaic-namespace-select" class="input-box">
+        <option value="">-- 読み込み中... --</option>
+      </select>
+      <select id="ns-link-mosaic-id-select" class="input-box">
+        <option value="">-- 読み込み中... --</option>
+      </select>
+      <button id="ns-link-mosaic-btn" class="button-primary">リンクする</button>
+      <button id="ns-unlink-mosaic-btn" class="button-primary">リンク解除する</button>
+      <div id="ns-link-mosaic-status"></div>
 
-        <hr>
+      <hr>
 
-        <h3>サブネームスペースを作成</h3>
-        <p style="font-size:13px;color:#94a3b8;">
-          親は自分が保有するネームスペースから選択してください（最大3階層まで。レベル3のネームスペースは親にできません）。
-        </p>
-        <select id="sub-namespace-parent-select" class="input-box">
-          <option value="">-- 読み込み中... --</option>
-        </select>
-        <input id="sub-namespace-name" class="input-box" placeholder="サブネームスペース名">
-        <p style="font-size:13px;color:#94a3b8;">推定手数料: <span id="sub-namespace-fee-estimate">---</span></p>
-        <button id="register-sub-namespace-btn" class="button-primary">サブネームスペースを登録</button>
-        <div id="sub-namespace-status"></div>
-      </div>
+      <h3>アカウントへのリンク・解除</h3>
+      <p style="font-size:13px;color:#94a3b8;">
+        リンク先のアカウントがアカウント操作制限でAddressAliasTransactionをブロックしていると失敗します。
+      </p>
+      <select id="ns-link-address-namespace-select" class="input-box">
+        <option value="">-- 読み込み中... --</option>
+      </select>
+      <input id="ns-link-address-target" class="input-box" placeholder="対象アドレス">
+      <button id="ns-link-address-btn" class="button-primary">リンクする</button>
+      <button id="ns-unlink-address-btn" class="button-primary">リンク解除する</button>
+      <div id="ns-link-address-status"></div>
 
-      <!-- リンクと解除 -->
-      <div id="ns-content-link" style="display:none;">
-        <h3>モザイクへのリンク・解除</h3>
-        <p style="font-size:13px;color:#94a3b8;">
-          モザイクにリンクできるのは、そのモザイクの作成者(オーナー)のみです。
-        </p>
-        <select id="ns-link-mosaic-namespace-select" class="input-box">
-          <option value="">-- 読み込み中... --</option>
-        </select>
-        <select id="ns-link-mosaic-id-select" class="input-box">
-          <option value="">-- 読み込み中... --</option>
-        </select>
-        <p style="font-size:13px;color:#94a3b8;">推定手数料: <span id="ns-link-mosaic-fee-estimate">---</span></p>
-        <button id="ns-link-mosaic-btn" class="button-primary">リンクする</button>
-        <button id="ns-unlink-mosaic-btn" class="button-primary">リンク解除する</button>
-        <div id="ns-link-mosaic-status"></div>
+      <hr>
 
-        <hr>
-
-        <h3>アカウントへのリンク・解除</h3>
-        <p style="font-size:13px;color:#94a3b8;">
-          リンク先のアカウントがアカウント操作制限でAddressAliasTransactionをブロックしていると失敗します。
-        </p>
-        <select id="ns-link-address-namespace-select" class="input-box">
-          <option value="">-- 読み込み中... --</option>
-        </select>
-        <input id="ns-link-address-target" class="input-box" placeholder="対象アドレス">
-        <p style="font-size:13px;color:#94a3b8;">推定手数料: <span id="ns-link-address-fee-estimate">---</span></p>
-        <button id="ns-link-address-btn" class="button-primary">リンクする</button>
-        <button id="ns-unlink-address-btn" class="button-primary">リンク解除する</button>
-        <div id="ns-link-address-status"></div>
-      </div>
+      <h3>保有ネームスペース一覧</h3>
+      <div id="namespace-list">読み込み中...</div>
     </div>
   </div>
 
   <!-- ============================================================
-       モザイク
+       モザイク作成
   ============================================================ -->
   <div id="mosaic-page" class="page">
     <div class="card">
       <h2>モザイク</h2>
       <button id="back-advanced-mosaic" class="button-primary">← 戻る</button>
 
-      <div class="wallet-tabs">
-        <div id="mosaic-tab-owned" class="wallet-tab active">保有モザイク一覧</div>
-        <div id="mosaic-tab-create" class="wallet-tab">新規モザイク作成</div>
-        <div id="mosaic-tab-supply" class="wallet-tab">供給量変更設定</div>
-      </div>
+      <h3>新規モザイク作成</h3>
 
-      <!-- 保有モザイク一覧 -->
-      <div id="mosaic-content-owned">
-        <div id="owned-mosaic-list">読み込み中...</div>
-      </div>
+      <p><b>可分性 (divisibility)：</b></p>
+      <select id="mosaic-divisibility" class="input-box">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5">5</option>
+        <option value="6" selected>6</option>
+      </select>
 
-      <!-- 新規モザイク作成 -->
-      <div id="mosaic-content-create" style="display:none;">
-        <p><b>可分性 (divisibility)：</b></p>
-        <select id="mosaic-divisibility" class="input-box">
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-          <option value="6" selected>6</option>
-        </select>
+      <p><b>有効期間：</b></p>
+      <select id="mosaic-duration-mode" class="input-box">
+        <option value="unlimited">無制限モザイク</option>
+        <option value="limited">期限付きモザイク</option>
+      </select>
 
-        <p><b>有効期間：</b></p>
-        <select id="mosaic-duration-mode" class="input-box">
-          <option value="unlimited">無制限モザイク</option>
-          <option value="limited">期限付きモザイク</option>
-        </select>
+      <div id="mosaic-duration-row" style="display:none;">
+        <input id="mosaic-duration" class="input-box" type="number" min="1" placeholder="有効期間(ブロック数)">
 
-        <div id="mosaic-duration-row" style="display:none;">
-          <input id="mosaic-duration" class="input-box" type="number" min="1" placeholder="有効期間(ブロック数)">
-
-          <div id="mosaic-duration-presets" class="settings-menu" style="display:none; margin-bottom:12px;">
-            <button type="button" class="settings-menu-item" data-days="30">30日（86,400ブロック）</button>
-            <button type="button" class="settings-menu-item" data-days="90">90日（259,200ブロック）</button>
-            <button type="button" class="settings-menu-item" data-days="180">180日（518,400ブロック）</button>
-            <button type="button" class="settings-menu-item" data-days="365">365日（1,051,200ブロック）</button>
-          </div>
-
-          <button id="mosaic-duration-calc-btn" type="button" class="button-primary">ブロックの計算</button>
+        <div id="mosaic-duration-presets" class="settings-menu" style="display:none; margin-bottom:12px;">
+          <button type="button" class="settings-menu-item" data-days="30">30日（86,400ブロック）</button>
+          <button type="button" class="settings-menu-item" data-days="90">90日（259,200ブロック）</button>
+          <button type="button" class="settings-menu-item" data-days="180">180日（518,400ブロック）</button>
+          <button type="button" class="settings-menu-item" data-days="365">365日（1,051,200ブロック）</button>
         </div>
 
-        <p><b>初期供給量：</b></p>
-        <input id="mosaic-initial-supply" class="input-box" type="number" min="0" value="1000">
+        <button id="mosaic-duration-calc-btn" type="button" class="button-primary">ブロックの計算</button>
+      </div>
 
-        <label class="encrypt-option">
-          <input type="checkbox" id="mosaic-supply-mutable">
-          <span>供給量変更可能</span>
-        </label>
-        <label class="encrypt-option">
-          <input type="checkbox" id="mosaic-transferable" checked>
-          <span>第三者へ譲渡可能</span>
-        </label>
-        <label class="encrypt-option">
-          <input type="checkbox" id="mosaic-restrictable">
-          <span>制限設定可能</span>
-        </label>
-        <label class="encrypt-option">
-          <input type="checkbox" id="mosaic-revokable">
-          <span>取り消し可能</span>
-        </label>
+      <p><b>初期供給量：</b></p>
+      <input id="mosaic-initial-supply" class="input-box" type="number" min="0" value="1000">
 
-        <p><b>ネームスペースとリンク（任意）：</b></p>
-        <select id="mosaic-link-namespace-select" class="input-box">
-          <option value="">-- リンクしない --</option>
-        </select>
+      <label class="encrypt-option">
+        <input type="checkbox" id="mosaic-supply-mutable">
+        <span>【チェック欄】供給量変更可能</span>
+      </label>
+      <label class="encrypt-option">
+        <input type="checkbox" id="mosaic-transferable" checked>
+        <span>【チェック欄】第三者へ譲渡可能</span>
+      </label>
+      <label class="encrypt-option">
+        <input type="checkbox" id="mosaic-restrictable">
+        <span>【チェック欄】制限設定可能</span>
+      </label>
+      <label class="encrypt-option">
+        <input type="checkbox" id="mosaic-revokable">
+        <span>【チェック欄】取り消し可能</span>
+      </label>
 
-        <p style="font-size:13px;color:#94a3b8;">
-          推定手数料: <span id="mosaic-fee-estimate">---</span>
-        </p>
+      <p><b>ネームスペースとリンク（任意）：</b></p>
+      <select id="mosaic-link-namespace-select" class="input-box">
+        <option value="">-- リンクしない --</option>
+      </select>
 
+      <p style="font-size:13px;color:#94a3b8;">
+        推定手数料: <span id="mosaic-fee-estimate">---</span>
+      </p>
+
+      <div style="display:flex; gap:8px;">
         <button id="create-mosaic-btn" class="button-primary">モザイクを作成する</button>
-        <div id="mosaic-create-status"></div>
+        <button id="goto-mosaic-supply-btn" class="button-primary">供給量変更</button>
       </div>
+      <div id="mosaic-create-status"></div>
 
-      <!-- 供給量変更設定 -->
-      <div id="mosaic-content-supply" style="display:none;">
-        <p style="font-size:13px;color:#94a3b8;">
-          「供給量変更可能(supplyMutable)」フラグ付きで作成したモザイクのみ変更できます。
-        </p>
+      <hr>
 
-        <p><b>対象モザイク：</b></p>
-        <select id="mosaic-supply-target-select" class="input-box">
-          <option value="">-- 読み込み中... --</option>
-        </select>
+      <h3>保有モザイク一覧</h3>
+      <div id="owned-mosaic-list">読み込み中...</div>
+    </div>
+  </div>
 
-        <p><b>供給変更方向：</b></p>
-        <select id="mosaic-supply-direction" class="input-box">
-          <option value="increase">増加</option>
-          <option value="decrease">減少</option>
-        </select>
+  <!-- ============================================================
+       モザイク供給量変更
+  ============================================================ -->
+  <div id="mosaic-supply-page" class="page">
+    <div class="card">
+      <h2>供給量変更設定</h2>
+      <button id="back-mosaic-supply" class="button-primary">← 戻る</button>
 
-        <p><b>供給量変更単位：</b></p>
-        <input id="mosaic-supply-amount" class="input-box" type="number" min="0" step="any" value="0">
+      <p style="font-size:13px;color:#94a3b8;">
+        「供給量変更可能(supplyMutable)」フラグ付きで作成したモザイクのみ変更できます。
+      </p>
 
-        <p><b>既存供給量：</b></p>
-        <div id="mosaic-supply-current" class="input-box">---</div>
+      <p><b>対象モザイク：</b></p>
+      <select id="mosaic-supply-target-select" class="input-box">
+        <option value="">-- 読み込み中... --</option>
+      </select>
 
-        <p><b>新しい供給量：</b></p>
-        <div id="mosaic-supply-new" class="input-box">---</div>
+      <p><b>供給変更方向：</b></p>
+      <select id="mosaic-supply-direction" class="input-box">
+        <option value="increase">増加</option>
+        <option value="decrease">減少</option>
+      </select>
 
-        <button id="mosaic-supply-save-btn" class="button-primary">保存</button>
-        <div id="mosaic-supply-status"></div>
-      </div>
+      <p><b>供給量変更単位：</b></p>
+      <input id="mosaic-supply-amount" class="input-box" type="number" min="0" step="any" value="0">
+
+      <p><b>既存供給量：</b></p>
+      <div id="mosaic-supply-current" class="input-box">---</div>
+
+      <p><b>新しい供給量：</b></p>
+      <div id="mosaic-supply-new" class="input-box">---</div>
+
+      <button id="mosaic-supply-save-btn" class="button-primary">保存</button>
+      <div id="mosaic-supply-status"></div>
     </div>
   </div>
 
@@ -775,53 +763,45 @@
       <h2>メタデータ</h2>
       <button id="back-advanced-metadata" class="button-primary">← 戻る</button>
 
-      <div class="wallet-tabs">
-        <div id="metadata-tab-owned" class="wallet-tab active">自分に紐づくメタデータ一覧</div>
-        <div id="metadata-tab-create" class="wallet-tab">メタデータの新規作成</div>
-      </div>
+      <p style="font-size:13px;color:#94a3b8;">
+        自分自身が対象(アドレス／自分が保有するネームスペース／自分が保有するモザイク)にのみ登録できます。
+        既存のキーと同じ組み合わせで登録すると更新になります。
+      </p>
 
-      <!-- 自分に紐づくメタデータ一覧 -->
-      <div id="metadata-content-owned">
-        <div id="metadata-list">読み込み中...</div>
-      </div>
+      <p><b>対象の種類：</b></p>
+      <select id="metadata-target-type" class="input-box">
+        <option value="address">アドレス（自分自身）</option>
+        <option value="namespace">ネームスペース</option>
+        <option value="mosaic">モザイク</option>
+      </select>
 
-      <!-- メタデータの新規作成 -->
-      <div id="metadata-content-create" style="display:none;">
-        <p style="font-size:13px;color:#94a3b8;">
-          自分自身が対象(アドレス／自分が保有するネームスペース／自分が保有するモザイク)にのみ登録できます。
-          既存のキーと同じ組み合わせで登録すると更新になります。
-        </p>
-
-        <p><b>対象の種類：</b></p>
-        <select id="metadata-target-type" class="input-box">
-          <option value="address">アドレス（自分自身）</option>
-          <option value="namespace">ネームスペース</option>
-          <option value="mosaic">モザイク</option>
+      <div id="metadata-target-namespace-row" style="display:none;">
+        <p><b>対象ネームスペース：</b></p>
+        <select id="metadata-target-namespace-select" class="input-box">
+          <option value="">-- 読み込み中... --</option>
         </select>
-
-        <div id="metadata-target-namespace-row" style="display:none;">
-          <p><b>対象ネームスペース：</b></p>
-          <select id="metadata-target-namespace-select" class="input-box">
-            <option value="">-- 読み込み中... --</option>
-          </select>
-        </div>
-
-        <div id="metadata-target-mosaic-row" style="display:none;">
-          <p><b>対象モザイク：</b></p>
-          <select id="metadata-target-mosaic-select" class="input-box">
-            <option value="">-- 読み込み中... --</option>
-          </select>
-        </div>
-
-        <p><b>メタデータキー：</b></p>
-        <input id="metadata-key-input" class="input-box" placeholder="キー（例: profile）">
-
-        <p><b>値：</b></p>
-        <textarea id="metadata-value-input" class="input-box" placeholder="値"></textarea>
-
-        <button id="submit-metadata-btn" class="button-primary">登録・更新する</button>
-        <div id="metadata-status"></div>
       </div>
+
+      <div id="metadata-target-mosaic-row" style="display:none;">
+        <p><b>対象モザイク：</b></p>
+        <select id="metadata-target-mosaic-select" class="input-box">
+          <option value="">-- 読み込み中... --</option>
+        </select>
+      </div>
+
+      <p><b>メタデータキー：</b></p>
+      <input id="metadata-key-input" class="input-box" placeholder="キー（例: profile）">
+
+      <p><b>値：</b></p>
+      <textarea id="metadata-value-input" class="input-box" placeholder="値"></textarea>
+
+      <button id="submit-metadata-btn" class="button-primary">登録・更新する</button>
+      <div id="metadata-status"></div>
+
+      <hr>
+
+      <h3>自分に紐づくメタデータ一覧</h3>
+      <div id="metadata-list">読み込み中...</div>
     </div>
   </div>
 
