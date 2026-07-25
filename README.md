@@ -13,9 +13,6 @@
 ウォレット内にあるモザイクを自動取得し、送金フォームのプルダウンから選択して送信できます。  
 モザイクIDや divisibility を手入力する必要はありません。
 
-## 必須：SSS Extension
-このウォレットは **SSS Extension なしでは絶対に動きません**  
-（秘密鍵はSSS Extension内で完結するため、ウォレット側には一切出てきません）
 
 - Chrome拡張機能 → [インストール](https://chrome.google.com/webstore/detail/sss-extension/llildiojemakefgnhhkmiiffonembcan)
 
