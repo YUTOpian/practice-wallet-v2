@@ -649,6 +649,15 @@
           オーナーが処理した代払い依頼が、ここに「コサイン待ち」として表示されます。
           「署名する」を押すだけで送金が完了します(普段は意識しなくても問題ありません)。
         </p>
+
+        <p style="font-size:13px;color:#94a3b8;">
+          ここに表示されない場合、接続しているノードにまだトランザクションが
+          伝わっていない可能性があります。オーナーから「コサイン情報」ファイルを
+          受け取っていれば、読み込むことで指定ノードから直接確認できます。
+        </p>
+        <input id="fee-deleg-user-cosign-info-file" class="input-box" type="file" accept=".json,application/json">
+        <div id="fee-deleg-user-cosign-info-status"></div>
+
         <div id="fee-deleg-user-status-list">読み込み中...</div>
       </div>
 
@@ -696,6 +705,20 @@
           <button id="fee-deleg-owner-approve-btn" class="button-primary">承認してアナウンスする</button>
         </div>
         <div id="fee-deleg-owner-request-status"></div>
+
+        <div id="fee-deleg-owner-cosign-info" style="display:none;">
+          <p style="font-size:13px;color:#94a3b8;">
+            アグリゲートボンデッドTxはこのノードのローカルキャッシュにのみ載ります。
+            依頼者の接続ノードにまだ伝播していない場合に備え、以下の「コサイン情報」を
+            依頼者へ渡してください。読み込むと指定ノードから直接確認・連署できます。
+          </p>
+          <div class="harvest-history-item">
+            <div>Aggregate Hash: <span id="fee-deleg-owner-cosign-info-hash" style="word-break:break-all;"></span></div>
+            <div>アナウンス先ノード: <span id="fee-deleg-owner-cosign-info-node" style="word-break:break-all;"></span></div>
+          </div>
+          <button id="fee-deleg-owner-cosign-info-download-btn" class="button-primary">コサイン情報をダウンロード</button>
+          <button id="fee-deleg-owner-cosign-info-copy-btn" class="account-hide-btn">コサイン情報をコピー</button>
+        </div>
 
         <hr>
 
