@@ -5,7 +5,7 @@ import { sendTx } from "./transfer.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
 import { selectNode } from "./nodeSelector.js";
-import { showPopup } from "./utils.js";
+import { showPopup, escapeHtml } from "./utils.js";
 import { setStatus } from "./ui.js";
 import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates, loadHarvestHistory } from "./harvest.js";
 import {
@@ -892,14 +892,16 @@ window.addEventListener("load", async () => {
       }
 
       setStatus("apostille-verify-status", `✅ ${matches.length}件の証明が見つかりました。`, "success");
+      // ⚠️ m.cert.fileName / owner / timestamp は他人が自由に設定できる
+      // 文字列(証明書作成者の入力そのまま)なので、必ずエスケープしてから表示する
       resultEl.innerHTML = matches
         .map(m => `
           <div class="harvest-history-item">
-            <div>Hash: ${m.hash}</div>
-            <div>高さ: ${m.height}</div>
-            <div>ファイル名: ${m.cert.fileName || "---"}</div>
-            <div>所有者: ${m.cert.owner}</div>
-            <div>記録日時(証明書内): ${m.cert.timestamp}</div>
+            <div>Hash: ${escapeHtml(m.hash)}</div>
+            <div>高さ: ${escapeHtml(m.height)}</div>
+            <div>ファイル名: ${escapeHtml(m.cert.fileName || "---")}</div>
+            <div>所有者: ${escapeHtml(m.cert.owner)}</div>
+            <div>記録日時(証明書内): ${escapeHtml(m.cert.timestamp)}</div>
           </div>
         `)
         .join("");
@@ -937,14 +939,15 @@ window.addEventListener("load", async () => {
       }
 
       setStatus("apostille-history-status", `${matches.length}件の履歴が見つかりました（古い順）。`, "success");
+      // ⚠️ こちらも他人が自由に設定できる文字列なのでエスケープする
       listEl.innerHTML = matches
         .map((m, i) => `
           <div class="harvest-history-item">
             <div>#${i + 1}</div>
-            <div>Hash: ${m.hash}</div>
-            <div>高さ: ${m.height}</div>
-            <div>所有者: ${m.cert.owner}</div>
-            <div>記録日時(証明書内): ${m.cert.timestamp}</div>
+            <div>Hash: ${escapeHtml(m.hash)}</div>
+            <div>高さ: ${escapeHtml(m.height)}</div>
+            <div>所有者: ${escapeHtml(m.cert.owner)}</div>
+            <div>記録日時(証明書内): ${escapeHtml(m.cert.timestamp)}</div>
           </div>
         `)
         .join("");
