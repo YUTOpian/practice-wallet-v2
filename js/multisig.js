@@ -102,6 +102,16 @@ export async function proposeBondedAggregate(embeddedTransactions, cosignerCount
   const signedAggregateTx = appState.facade.transactionFactory.static.deserialize(signedBytes);
   const aggregateHash = appState.facade.hashTransaction(signedAggregateTx);
 
+  // SSS Extensionでは、直前の署名ポップアップを閉じた直後に次のポップアップを
+  // 開こうとすると、表示が間に合わず一瞬で消えてしまうことがある
+  // (transfer.jsのメッセージ暗号化時と同じ問題)。
+  // ここではアグリゲート本体の署名(ポップアップ①)の直後に
+  // ハッシュロックTxの署名(ポップアップ②)をリクエストするため、
+  // ローカル署名(ニーモニック/秘密鍵)以外の場合は少し間隔を空ける。
+  if (appState.authMode !== "local") {
+    await new Promise((r) => setTimeout(r, 600));
+  }
+
   // ハッシュロックTx (10 XYMを一時ロック。連署が集まらず期限切れになると自動返却)
   const xymId = getXymMosaicIdHex();
   const hashLockDescriptor = new descriptors.HashLockTransactionV1Descriptor(
