@@ -5,7 +5,7 @@
 // 参考: https://docs.symboltest.net/ja/textbook/namespaces/
 
 import { appState } from "./config.js";
-import { signAndAnnounceTx } from "./auth.js";
+import { signAndAnnounceTx, estimateFeeFromTx } from "./auth.js";
 
 /* ============================================================
    このネームスペース自身のID(16進)を depth に応じて正しく取り出す
@@ -164,7 +164,13 @@ export async function populateParentNamespaceSelect() {
    実行すると、有効期間が延長される(公式仕様)。サブネームスペースは
    ルートと同じ期間を共有するため個別の更新は不要。
 ============================================================ */
-export async function registerRootNamespace(name, durationBlocks) {
+/* ============================================================
+   ルートネームスペース登録・更新(延長)
+   既に自分が所有している同名のルートネームスペースに対して再度
+   実行すると、有効期間が延長される(公式仕様)。サブネームスペースは
+   ルートと同じ期間を共有するため個別の更新は不要。
+============================================================ */
+function buildRootNamespaceTx(name, durationBlocks) {
   const { descriptors, models } = appState.sdkSymbol;
 
   const namespaceId = new models.NamespaceId(appState.sdkSymbol.generateNamespaceId(name));
@@ -177,20 +183,26 @@ export async function registerRootNamespace(name, durationBlocks) {
     name
   );
 
-  const tx = appState.facade.createTransactionFromTypedDescriptor(
+  return appState.facade.createTransactionFromTypedDescriptor(
     descriptor,
     appState.currentPubKey,
     appState.feeMultiplier ?? 100,
     60 * 60
   );
+}
 
-  return await signAndAnnounceTx(tx);
+export function estimateRootNamespaceFee(name, durationBlocks) {
+  return estimateFeeFromTx(buildRootNamespaceTx(name, durationBlocks));
+}
+
+export async function registerRootNamespace(name, durationBlocks) {
+  return await signAndAnnounceTx(buildRootNamespaceTx(name, durationBlocks));
 }
 
 /* ============================================================
    サブネームスペース登録(最大3階層目まで)
 ============================================================ */
-export async function registerSubNamespace(parentIdHex, subName) {
+function buildSubNamespaceTx(parentIdHex, subName) {
   const { descriptors, models } = appState.sdkSymbol;
 
   const parentId = new models.NamespaceId(BigInt("0x" + parentIdHex));
@@ -206,14 +218,20 @@ export async function registerSubNamespace(parentIdHex, subName) {
     subName
   );
 
-  const tx = appState.facade.createTransactionFromTypedDescriptor(
+  return appState.facade.createTransactionFromTypedDescriptor(
     descriptor,
     appState.currentPubKey,
     appState.feeMultiplier ?? 100,
     60 * 60
   );
+}
 
-  return await signAndAnnounceTx(tx);
+export function estimateSubNamespaceFee(parentIdHex, subName) {
+  return estimateFeeFromTx(buildSubNamespaceTx(parentIdHex, subName));
+}
+
+export async function registerSubNamespace(parentIdHex, subName) {
+  return await signAndAnnounceTx(buildSubNamespaceTx(parentIdHex, subName));
 }
 
 /* ============================================================
@@ -222,7 +240,7 @@ export async function registerSubNamespace(parentIdHex, subName) {
    ※ リンク先アカウント自身がAccountOperationRestrictionで
      AddressAliasTransactionをブロックしていると失敗する(仕様通り)。
 ============================================================ */
-export async function setAddressAlias(namespaceIdHex, targetAddress, action) {
+function buildAddressAliasTx(namespaceIdHex, targetAddress, action) {
   const { descriptors, models } = appState.sdkSymbol;
 
   const namespaceId = new models.NamespaceId(BigInt("0x" + namespaceIdHex));
@@ -231,12 +249,18 @@ export async function setAddressAlias(namespaceIdHex, targetAddress, action) {
 
   const descriptor = new descriptors.AddressAliasTransactionV1Descriptor(namespaceId, address, aliasAction);
 
-  const tx = appState.facade.createTransactionFromTypedDescriptor(
+  return appState.facade.createTransactionFromTypedDescriptor(
     descriptor,
     appState.currentPubKey,
     appState.feeMultiplier ?? 100,
     60 * 60
   );
+}
 
-  return await signAndAnnounceTx(tx);
+export function estimateAddressAliasFee(namespaceIdHex, targetAddress, action) {
+  return estimateFeeFromTx(buildAddressAliasTx(namespaceIdHex, targetAddress, action));
+}
+
+export async function setAddressAlias(namespaceIdHex, targetAddress, action) {
+  return await signAndAnnounceTx(buildAddressAliasTx(namespaceIdHex, targetAddress, action));
 }

@@ -48,6 +48,9 @@ import {
   registerSubNamespace,
   fetchOwnedNamespaceOptions,
   setAddressAlias,
+  estimateRootNamespaceFee,
+  estimateSubNamespaceFee,
+  estimateAddressAliasFee,
 } from "./namespace.js";
 import {
   loadOwnedMosaicsWithAlias,
@@ -56,6 +59,7 @@ import {
   setMosaicAlias,
   fetchOwnedMosaicIds,
   estimateMosaicCreationFee,
+  estimateMosaicAliasFee,
   changeMosaicSupply,
   fetchMosaicDetail,
 } from "./mosaic.js";
@@ -117,7 +121,6 @@ window.addEventListener("load", async () => {
   const advancedPage = document.getElementById("advanced-page");
   const namespacePage = document.getElementById("namespace-page");
   const mosaicPage = document.getElementById("mosaic-page");
-  const mosaicSupplyPage = document.getElementById("mosaic-supply-page");
   const metadataPage = document.getElementById("metadata-page");
   const multisigMenuPage = document.getElementById("multisig-menu-page");
   const multisigSettingsPage = document.getElementById("multisig-settings-page");
@@ -1289,6 +1292,25 @@ window.addEventListener("load", async () => {
     }
   });
 
+  function updateRootNamespaceFeeEstimate() {
+    const el = document.getElementById("root-namespace-fee-estimate");
+    if (!el) return;
+    const name = document.getElementById("root-namespace-name").value.trim();
+    const duration = parseInt(document.getElementById("root-namespace-duration").value, 10);
+    if (!name || !Number.isInteger(duration) || duration <= 0) {
+      el.textContent = "---";
+      return;
+    }
+    try {
+      el.textContent = `約 ${estimateRootNamespaceFee(name, duration)} XYM`;
+    } catch {
+      el.textContent = "---";
+    }
+  }
+
+  document.getElementById("root-namespace-name")?.addEventListener("input", updateRootNamespaceFeeEstimate);
+  document.getElementById("root-namespace-duration")?.addEventListener("input", updateRootNamespaceFeeEstimate);
+
   document.getElementById("root-namespace-calc-btn")?.addEventListener("click", () => {
     const panel = document.getElementById("root-namespace-duration-presets");
     panel.style.display = panel.style.display === "none" ? "flex" : "none";
@@ -1300,6 +1322,7 @@ window.addEventListener("load", async () => {
     const days = parseInt(btn.dataset.days, 10);
     document.getElementById("root-namespace-duration").value = days * 2880;
     document.getElementById("root-namespace-duration-presets").style.display = "none";
+    updateRootNamespaceFeeEstimate();
   });
 
   document.getElementById("register-root-namespace-btn")?.addEventListener("click", async () => {
@@ -1321,6 +1344,7 @@ window.addEventListener("load", async () => {
       setStatus("root-namespace-status", `✅ 登録リクエストを送信しました。Hash: ${hash}`, "success");
       document.getElementById("root-namespace-name").value = "";
       document.getElementById("root-namespace-duration").value = "";
+      updateRootNamespaceFeeEstimate();
       await loadOwnedNamespaces();
       await populateParentNamespaceSelect();
     } catch (e) {
@@ -1328,6 +1352,25 @@ window.addEventListener("load", async () => {
       setStatus("root-namespace-status", e.message || "登録に失敗しました。", "error");
     }
   });
+
+  function updateSubNamespaceFeeEstimate() {
+    const el = document.getElementById("sub-namespace-fee-estimate");
+    if (!el) return;
+    const parentId = document.getElementById("sub-namespace-parent-select").value;
+    const subName = document.getElementById("sub-namespace-name").value.trim();
+    if (!parentId || !subName) {
+      el.textContent = "---";
+      return;
+    }
+    try {
+      el.textContent = `約 ${estimateSubNamespaceFee(parentId, subName)} XYM`;
+    } catch {
+      el.textContent = "---";
+    }
+  }
+
+  document.getElementById("sub-namespace-parent-select")?.addEventListener("change", updateSubNamespaceFeeEstimate);
+  document.getElementById("sub-namespace-name")?.addEventListener("input", updateSubNamespaceFeeEstimate);
 
   document.getElementById("register-sub-namespace-btn")?.addEventListener("click", async () => {
     const parentId = document.getElementById("sub-namespace-parent-select").value;
@@ -1347,6 +1390,7 @@ window.addEventListener("load", async () => {
       const hash = await registerSubNamespace(parentId, subName);
       setStatus("sub-namespace-status", `✅ 登録リクエストを送信しました。Hash: ${hash}`, "success");
       document.getElementById("sub-namespace-name").value = "";
+      updateSubNamespaceFeeEstimate();
       await loadOwnedNamespaces();
       await populateParentNamespaceSelect();
     } catch (e) {
@@ -1385,6 +1429,25 @@ window.addEventListener("load", async () => {
   document.getElementById("ns-link-mosaic-btn")?.addEventListener("click", () => submitMosaicAliasFromNamespacePage("link"));
   document.getElementById("ns-unlink-mosaic-btn")?.addEventListener("click", () => submitMosaicAliasFromNamespacePage("unlink"));
 
+  function updateNsLinkMosaicFeeEstimate() {
+    const el = document.getElementById("ns-link-mosaic-fee-estimate");
+    if (!el) return;
+    const namespaceId = document.getElementById("ns-link-mosaic-namespace-select").value;
+    const mosaicId = document.getElementById("ns-link-mosaic-id-select").value;
+    if (!namespaceId || !mosaicId) {
+      el.textContent = "---";
+      return;
+    }
+    try {
+      el.textContent = `約 ${estimateMosaicAliasFee(mosaicId, namespaceId, "link")} XYM`;
+    } catch {
+      el.textContent = "---";
+    }
+  }
+
+  document.getElementById("ns-link-mosaic-namespace-select")?.addEventListener("change", updateNsLinkMosaicFeeEstimate);
+  document.getElementById("ns-link-mosaic-id-select")?.addEventListener("change", updateNsLinkMosaicFeeEstimate);
+
   async function submitMosaicAliasFromNamespacePage(action) {
     const namespaceId = document.getElementById("ns-link-mosaic-namespace-select").value;
     const mosaicId = document.getElementById("ns-link-mosaic-id-select").value;
@@ -1407,6 +1470,25 @@ window.addEventListener("load", async () => {
 
   document.getElementById("ns-link-address-btn")?.addEventListener("click", () => submitAddressAliasFromNamespacePage("link"));
   document.getElementById("ns-unlink-address-btn")?.addEventListener("click", () => submitAddressAliasFromNamespacePage("unlink"));
+
+  function updateNsLinkAddressFeeEstimate() {
+    const el = document.getElementById("ns-link-address-fee-estimate");
+    if (!el) return;
+    const namespaceId = document.getElementById("ns-link-address-namespace-select").value;
+    const targetAddress = document.getElementById("ns-link-address-target").value.trim();
+    if (!namespaceId || !targetAddress) {
+      el.textContent = "---";
+      return;
+    }
+    try {
+      el.textContent = `約 ${estimateAddressAliasFee(namespaceId, targetAddress, "link")} XYM`;
+    } catch {
+      el.textContent = "---";
+    }
+  }
+
+  document.getElementById("ns-link-address-namespace-select")?.addEventListener("change", updateNsLinkAddressFeeEstimate);
+  document.getElementById("ns-link-address-target")?.addEventListener("input", updateNsLinkAddressFeeEstimate);
 
   async function submitAddressAliasFromNamespacePage(action) {
     const namespaceId = document.getElementById("ns-link-address-namespace-select").value;
@@ -1549,8 +1631,7 @@ window.addEventListener("load", async () => {
   // ============================
   // モザイク供給量変更
   // ============================
-  document.getElementById("goto-mosaic-supply-btn")?.addEventListener("click", async () => {
-    showPage(mosaicSupplyPage);
+  async function populateMosaicSupplyTab() {
     setStatus("mosaic-supply-status", "", "default");
     document.getElementById("mosaic-supply-current").textContent = "---";
     document.getElementById("mosaic-supply-new").textContent = "---";
@@ -1567,7 +1648,7 @@ window.addEventListener("load", async () => {
       console.warn("モザイク候補の取得に失敗しました", e);
       select.innerHTML = `<option value="">-- 取得に失敗しました --</option>`;
     }
-  });
+  }
 
   let mosaicSupplyDetail = null;
 
@@ -1865,7 +1946,6 @@ window.addEventListener("load", async () => {
   document.getElementById("back-account-advanced")?.addEventListener("click", () => showPage(accountPage));
   document.getElementById("back-advanced-namespace")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-advanced-mosaic")?.addEventListener("click", () => showPage(advancedPage));
-  document.getElementById("back-mosaic-supply")?.addEventListener("click", () => showPage(mosaicPage));
   document.getElementById("back-advanced-metadata")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-advanced-multisig-menu")?.addEventListener("click", () => showPage(advancedPage));
   document.getElementById("back-multisig-menu-settings")?.addEventListener("click", () => showPage(multisigMenuPage));
@@ -1910,7 +1990,48 @@ window.addEventListener("load", async () => {
     tokenContent.style.display = "none";
     activityContent.style.display = "block";
   });
-  
+
+  // 汎用タブ切替(モザイク・ネームスペース・メタデータ画面で使う)
+  function setupTabGroup(tabIds, contentIds, onShow = []) {
+    tabIds.forEach((tabId, i) => {
+      document.getElementById(tabId)?.addEventListener("click", () => {
+        tabIds.forEach((id, j) => {
+          document.getElementById(id)?.classList.toggle("active", j === i);
+          const content = document.getElementById(contentIds[j]);
+          if (content) content.style.display = j === i ? "block" : "none";
+        });
+        onShow[i]?.();
+      });
+    });
+  }
+
+  setupTabGroup(
+    ["mosaic-tab-owned", "mosaic-tab-create", "mosaic-tab-supply"],
+    ["mosaic-content-owned", "mosaic-content-create", "mosaic-content-supply"],
+    [
+      () => loadOwnedMosaicsWithAlias(),
+      () => updateMosaicFeeEstimate(),
+      () => populateMosaicSupplyTab(),
+    ]
+  );
+
+  setupTabGroup(
+    ["ns-tab-owned", "ns-tab-create", "ns-tab-link"],
+    ["ns-content-owned", "ns-content-create", "ns-content-link"],
+    [
+      () => loadOwnedNamespaces(),
+      () => { updateRootNamespaceFeeEstimate(); updateSubNamespaceFeeEstimate(); },
+      () => { updateNsLinkMosaicFeeEstimate(); updateNsLinkAddressFeeEstimate(); },
+    ]
+  );
+
+  setupTabGroup(
+    ["metadata-tab-owned", "metadata-tab-create"],
+    ["metadata-content-owned", "metadata-content-create"],
+    [() => loadOwnMetadataList(), null]
+  );
+
+
   // ============================
   // アドレスコピー
   // ============================

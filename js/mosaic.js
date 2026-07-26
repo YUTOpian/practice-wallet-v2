@@ -4,7 +4,7 @@
 import { appState } from "./config.js";
 import { setStatus } from "./ui.js";
 import { formatMosaicAmount } from "./utils.js";
-import { signAndAnnounceTx } from "./auth.js";
+import { signAndAnnounceTx, estimateFeeFromTx } from "./auth.js";
 import { fetchOwnedNamespaceOptions } from "./namespace.js";
 
 // Symbolのブロック目標間隔(秒)。メインネット/テストネットともに30秒。
@@ -178,6 +178,10 @@ export async function populateMosaicNamespaceSelect() {
    作成済みモザイクを後からネームスペースにリンク/解除する
 ============================================================ */
 export async function setMosaicAlias(mosaicIdHex, namespaceIdHex, action = "link") {
+  return await signAndAnnounceTx(buildMosaicAliasTx(mosaicIdHex, namespaceIdHex, action));
+}
+
+function buildMosaicAliasTx(mosaicIdHex, namespaceIdHex, action = "link") {
   const { descriptors, models } = appState.sdkSymbol;
 
   const namespaceId = new models.NamespaceId(BigInt("0x" + namespaceIdHex));
@@ -186,14 +190,16 @@ export async function setMosaicAlias(mosaicIdHex, namespaceIdHex, action = "link
 
   const aliasDescriptor = new descriptors.MosaicAliasTransactionV1Descriptor(namespaceId, mosaicId, aliasAction);
 
-  const tx = appState.facade.createTransactionFromTypedDescriptor(
+  return appState.facade.createTransactionFromTypedDescriptor(
     aliasDescriptor,
     appState.currentPubKey,
     appState.feeMultiplier ?? 100,
     60 * 60
   );
+}
 
-  return await signAndAnnounceTx(tx);
+export function estimateMosaicAliasFee(mosaicIdHex, namespaceIdHex, action = "link") {
+  return estimateFeeFromTx(buildMosaicAliasTx(mosaicIdHex, namespaceIdHex, action));
 }
 
 // 後方互換用エイリアス
@@ -290,11 +296,9 @@ function buildMosaicCreationTx({
 ============================================================ */
 export function estimateMosaicCreationFee(options) {
   const tx = buildMosaicCreationTx(options);
-  const sizeBytes = tx.size;
-  const feeMicroXym = sizeBytes * (appState.feeMultiplier ?? 100);
   return {
-    sizeBytes,
-    feeXym: (feeMicroXym / 1_000_000).toLocaleString("ja-JP", { maximumFractionDigits: 6 }),
+    sizeBytes: tx.size,
+    feeXym: estimateFeeFromTx(tx),
   };
 }
 

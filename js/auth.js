@@ -567,6 +567,14 @@ export async function signTxOnly(tx) {
    ネームスペース登録・モザイク作成など、送金・ハーベスト以外の
    機能からも共通で使う。
 ============================================================ */
+/* ============================================================
+   未署名のTxオブジェクトから推定手数料(XYM)を計算する共通ヘルパー
+============================================================ */
+export function estimateFeeFromTx(tx) {
+  const feeMicroXym = tx.size * (appState.feeMultiplier ?? 100);
+  return (feeMicroXym / 1_000_000).toLocaleString("ja-JP", { maximumFractionDigits: 6 });
+}
+
 export async function signAndAnnounceTx(tx) {
   const { jsonPayload: announceBody, signedBytes } = await signTxOnly(tx);
 
