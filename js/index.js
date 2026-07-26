@@ -385,6 +385,13 @@ window.addEventListener("load", async () => {
     document.getElementById("selected-mosaic-id").value = 
       item.querySelector(".mosaic-id")?.textContent;
 
+    // ⚠️ #send-mosaic-list は account.js が生成したHTML(#mosaic-list)を
+    // innerHTMLでコピーしただけなので、item.onclickで設定されるはずの
+    // 残高(selected-mosaic-balance)がここまで反映されていなかった。
+    // 明示的にコピー先の .mosaic-amount から取得してセットする。
+    document.getElementById("selected-mosaic-balance").textContent = 
+      item.querySelector(".mosaic-amount")?.textContent ?? "---";
+
     cameFromMosaicList = false;
     if (backSendBtn) backSendBtn.textContent = "← トークン選択へ戻る";
     showPage(transferPage);
@@ -698,11 +705,14 @@ window.addEventListener("load", async () => {
     const container = document.getElementById("multisend-rows");
     const row = document.createElement("div");
     row.className = "multisend-row";
+    // ⚠️ data はCSVインポート由来の可能性があり、フィールドに " を含む
+    // 細工されたCSVだと属性からエスケープしてHTMLインジェクションが可能なため、
+    // value属性へ埋め込む前に必ずエスケープする
     row.innerHTML = `
-      <input class="input-box ms-address" placeholder="送金先アドレス" value="${data.address}">
-      <input class="input-box ms-mosaic" placeholder="mosaic (例: symbol.xym)" value="${data.mosaic}">
-      <input class="input-box ms-amount" type="number" min="0" step="any" placeholder="数量" value="${data.amount}">
-      <input class="input-box ms-message" placeholder="メッセージ" value="${data.message}">
+      <input class="input-box ms-address" placeholder="送金先アドレス" value="${escapeHtml(data.address)}">
+      <input class="input-box ms-mosaic" placeholder="mosaic (例: symbol.xym)" value="${escapeHtml(data.mosaic)}">
+      <input class="input-box ms-amount" type="number" min="0" step="any" placeholder="数量" value="${escapeHtml(data.amount)}">
+      <input class="input-box ms-message" placeholder="メッセージ" value="${escapeHtml(data.message)}">
       <button class="account-hide-btn" data-action="remove-row">削除</button>
     `;
     container.appendChild(row);
