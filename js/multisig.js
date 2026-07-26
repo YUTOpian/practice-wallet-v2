@@ -17,6 +17,19 @@ import { requestTxConfirmation, formatTxDeadline, TxCancelledError } from "./txC
 
 const HASH_LOCK_AMOUNT = 10_000_000n; // 10 XYM (microXYM)
 
+/* ============================================================
+   ハッシュロックの承認待ちが「タイムアウト」した場合専用のエラー。
+   (ネットワーク混雑等で実際にはこの後ハッシュロック自体は確定する
+   可能性があるため、「失敗」と区別して呼び出し側でリカバリー情報を
+   案内できるようにする)
+============================================================ */
+export class HashLockTimeoutError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "HashLockTimeoutError";
+  }
+}
+
 // アグリゲートボンデッドTx本体の有効期限(秒)。proposeBondedAggregate内の
 // createTransactionFromTypedDescriptor() 呼び出しと必ず同じ値を使うこと。
 const AGGREGATE_BONDED_DEADLINE_SECONDS = 60 * 60 * 6; // 6時間
@@ -54,7 +67,25 @@ async function waitConfirmed(hash, { timeoutMs = 90000, intervalMs = 3000 } = {}
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new Error("ハッシュロックの承認待ちがタイムアウトしました");
+  throw new HashLockTimeoutError("ハッシュロックの承認待ちがタイムアウトしました");
+}
+
+/* ============================================================
+   署名済みのアグリゲートボンデッドTxを /transactions/partial へ
+   アナウンスする。proposeBondedAggregate 本体からも、ハッシュロックの
+   承認待ちがタイムアウトした後の手動リトライからも使える共通処理。
+============================================================ */
+export async function announcePartialAggregate(aggregateJsonPayload) {
+  const res = await fetch(new URL("/transactions/partial", appState.NODE), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: aggregateJsonPayload,
+  });
+  const result = await res.json();
+  if (!res.ok) {
+    throw new Error(result.message ?? "アグリゲートボンデッドTxのアナウンスに失敗しました");
+  }
+  return result;
 }
 
 /* ============================================================
@@ -132,18 +163,35 @@ export async function proposeBondedAggregate(embeddedTransactions, cosignerCount
 
   const hashLockTxHash = await signAndAnnounceTx(hashLockTx);
 
-  await waitConfirmed(hashLockTxHash);
+  try {
+    await waitConfirmed(hashLockTxHash);
+  } catch (e) {
+    if (e instanceof HashLockTimeoutError) {
+      // ⚠️ ここで例外を投げてaggregateJsonPayloadを握りつぶすと、
+      // ハッシュロック自体は後から確定してしまい(ネットワーク混雑で
+      // 単に90秒以内に承認が確認できなかっただけの可能性がある)、
+      // 誰にも使われないまま10XYMがHASH_LOCK_DURATION(約7時間)分
+      // ロックされ続けるだけになってしまう。
+      // 署名済みペイロードをコンソールに残し、ハッシュロックが実際には
+      // 確定していた場合に手動で再アナウンスできるようにしておく。
+      console.warn(
+        "[multisig] ハッシュロックの承認待ちがタイムアウトしました。" +
+        "ハッシュロック自体は後から確定する可能性があります。もし確定していた場合、" +
+        "以下のペイロードを announcePartialAggregate(aggregateJsonPayload) " +
+        "(multisig.jsからexport済み)に渡せば提案を送信し直せます。",
+        { hashLockTxHash, aggregateJsonPayload }
+      );
+      throw new HashLockTimeoutError(
+        `ハッシュロックの承認待ちがタイムアウトしました(Hash: ${hashLockTxHash})。` +
+        "ハッシュロック自体は後から確定する可能性があります。少し待ってから" +
+        "もう一度提案するか、ブラウザのコンソールに出力された復旧手順で再送信してください。"
+      );
+    }
+    throw e;
+  }
 
   // ハッシュロック確定後、ボンデッドTxを/transactions/partialへ
-  const res = await fetch(new URL("/transactions/partial", appState.NODE), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: aggregateJsonPayload,
-  });
-  const result = await res.json();
-  if (!res.ok) {
-    throw new Error(result.message ?? "アグリゲートボンデッドTxのアナウンスに失敗しました");
-  }
+  await announcePartialAggregate(aggregateJsonPayload);
 
   return aggregateHash.toString();
 }
@@ -246,6 +294,23 @@ export async function updateMultisigSettings({
 }
 
 /* ============================================================
+   対象マルチシグアカウントの minApproval を取得する
+   (sendFromMultisig で、必要な追加連署者数を正しく見積もるために使う)
+============================================================ */
+async function fetchMultisigMinApproval(address) {
+  try {
+    const res = await fetch(`${appState.NODE}/account/${address}/multisig`);
+    if (res.status === 404) return null;
+    const json = await res.json();
+    const minApproval = Number(json.multisig?.minApproval);
+    return Number.isFinite(minApproval) ? minApproval : null;
+  } catch (e) {
+    console.warn("fetchMultisigMinApproval error:", address, e);
+    return null;
+  }
+}
+
+/* ============================================================
    マルチシグ送金
 ============================================================ */
 export async function sendFromMultisig({ multisigAddress, recipientAddress, amountXym, message }) {
@@ -284,16 +349,24 @@ export async function sendFromMultisig({ multisigAddress, recipientAddress, amou
     new appState.sdkCore.PublicKey(multisigPublicKey)
   );
 
-  // 自分自身の署名(起案者)がマルチシグの連署者の1人としてそのままカウントされるため、
-  // ここでは追加の連署者数は指定しない(0)。承認数が足りない場合は他の連署者が
-  // 「マルチシグ署名」から追加で連署する。
-  return await proposeBondedAggregate([embeddedTx], 0, {
+  // ⚠️ 以前は常に 0 を渡していたが、それが正しいのは対象マルチシグの
+  // minApproval が 1 の場合のみだった。起案者自身の署名がそのまま
+  // 1人分の連署としてカウントされるので、必要な「追加」連署者数は
+  // (minApproval - 1)。minApproval が取得できない場合は
+  // 安全側(0)にフォールバックする。
+  const minApproval = await fetchMultisigMinApproval(multisigAddress);
+  const cosignerCount = minApproval != null ? Math.max(0, minApproval - 1) : 0;
+
+  return await proposeBondedAggregate([embeddedTx], cosignerCount, {
     typeLabel: "マルチシグ送金(提案)",
     sender: multisigAddress,
     recipient: recipientAddress,
     details: [
       { label: "数量", value: `${amountXym} XYM` },
       { label: "メッセージ", value: message || "(なし)" },
+      ...(minApproval != null
+        ? [{ label: "必要な承認数(minApproval)", value: `${minApproval}(うち自分の署名で1件済み)` }]
+        : []),
     ],
   });
 }

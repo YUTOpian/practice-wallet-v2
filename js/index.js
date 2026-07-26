@@ -653,7 +653,7 @@ window.addEventListener("load", async () => {
   document.getElementById("submit-multisig-send-btn")?.addEventListener("click", async () => {
     const multisigAddress = document.getElementById("multisig-send-from-select").value;
     const recipientAddress = document.getElementById("multisig-send-recipient").value.trim();
-    const amountXym = parseFloat(document.getElementById("multisig-send-amount").value) || 0;
+    const amountRaw = document.getElementById("multisig-send-amount").value.trim();
     const message = document.getElementById("multisig-send-message").value;
 
     if (!multisigAddress) {
@@ -662,6 +662,25 @@ window.addEventListener("load", async () => {
     }
     if (!recipientAddress) {
       setStatus("multisig-send-status", "宛先アドレスを入力してください。", "error");
+      return;
+    }
+
+    // ⚠️ 以前は amountRaw を Number.parseFloat(...) || 0 としていたため、
+    // 未入力・不正な文字列・負の値でもエラーにならず、黙って「モザイクなし
+    // (メッセージのみ)」の提案として処理されてしまっていた。
+    // ハッシュロック(10XYM)+承認待ちを伴う重い操作なので、金額の入力ミスは
+    // 明示的にエラーとして弾く(メッセージのみを送りたい場合は数量欄を
+    // 空のままにしてもらい、その場合のみ0扱いを許可する)。
+    let amountXym = 0;
+    if (amountRaw !== "") {
+      amountXym = Number(amountRaw);
+      if (!Number.isFinite(amountXym) || amountXym < 0) {
+        setStatus("multisig-send-status", "数量が不正です。", "error");
+        return;
+      }
+    }
+    if (amountXym === 0 && message.trim() === "") {
+      setStatus("multisig-send-status", "数量またはメッセージのいずれかを入力してください。", "error");
       return;
     }
 
