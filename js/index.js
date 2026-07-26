@@ -51,6 +51,8 @@ import {
   estimateRootNamespaceFee,
   estimateSubNamespaceFee,
   estimateAddressAliasFee,
+  estimateRootNamespaceRentalFee,
+  estimateSubNamespaceRentalFee,
 } from "./namespace.js";
 import {
   loadOwnedMosaicsWithAlias,
@@ -62,6 +64,7 @@ import {
   estimateMosaicAliasFee,
   changeMosaicSupply,
   fetchMosaicDetail,
+  estimateMosaicRentalFee,
 } from "./mosaic.js";
 import { setMetadata, loadOwnMetadataList } from "./metadata.js";
 import {
@@ -91,6 +94,12 @@ import {
   broadcastOfflineTx,
   checkAlreadyBroadcastStatus,
 } from "./offline.js";
+import {
+  createSponsorshipRequest,
+  downloadSponsorshipRequestJson,
+  parseSponsorshipRequestJson,
+  approveSponsorshipRequest,
+} from "./feeDelegation.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -143,6 +152,9 @@ window.addEventListener("load", async () => {
   const restrictionMosaicAddressPage = document.getElementById("restriction-mosaic-address-page");
   const offlineTxCreatePage = document.getElementById("offline-tx-create-page");
   const offlineBroadcastPage = document.getElementById("offline-broadcast-page");
+  const feeDelegationMenuPage = document.getElementById("fee-delegation-menu-page");
+  const feeDelegationUserPage = document.getElementById("fee-delegation-user-page");
+  const feeDelegationOwnerPage = document.getElementById("fee-delegation-owner-page");
 
   // ============================
   // ページ切替
@@ -1292,19 +1304,224 @@ window.addEventListener("load", async () => {
     }
   });
 
-  function updateRootNamespaceFeeEstimate() {
+  // ============================
+  // 手数料代払い(スポンサーシップ)
+  // ============================
+
+  // --- メニュー ---
+  document.getElementById("menu-fee-delegation")?.addEventListener("click", () => {
+    showPage(feeDelegationMenuPage);
+  });
+  document.getElementById("back-advanced-fee-delegation")?.addEventListener("click", () => showPage(advancedPage));
+
+  // --- ユーザー画面 ---
+  function populateFeeDelegMosaicSelect() {
+    const select = document.getElementById("fee-deleg-req-mosaic");
+    if (!select) return;
+    const entries = Object.entries(appState.mosaicInfo ?? {});
+    select.innerHTML = entries.length
+      ? entries
+          .map(([id, info]) => `<option value="${id}">${info.mosaicName} (${id})</option>`)
+          .join("")
+      : `<option value="">-- 保有モザイクがありません --</option>`;
+  }
+
+  document.getElementById("menu-fee-delegation-user")?.addEventListener("click", async () => {
+    document.getElementById("fee-deleg-user-balance").textContent =
+      document.getElementById("account-balance")?.textContent || "---";
+    populateFeeDelegMosaicSelect();
+    document.getElementById("fee-deleg-req-preview").style.display = "none";
+    setStatus("fee-deleg-req-status", "", "default");
+    showPage(feeDelegationUserPage);
+    await loadPendingPartialTransactions("fee-deleg-user-status-list");
+  });
+  document.getElementById("back-fee-delegation-menu-user")?.addEventListener("click", () => showPage(feeDelegationMenuPage));
+
+  let feeDelegRequestGenerated = null;
+
+  document.getElementById("fee-deleg-req-create-btn")?.addEventListener("click", () => {
+    const recipientAddress = document.getElementById("fee-deleg-req-recipient").value.trim();
+    const mosaicIdHex = document.getElementById("fee-deleg-req-mosaic").value;
+    const amount = document.getElementById("fee-deleg-req-amount").value;
+    const message = document.getElementById("fee-deleg-req-message").value;
+
+    try {
+      feeDelegRequestGenerated = createSponsorshipRequest({ recipientAddress, mosaicIdHex, amount, message });
+
+      document.getElementById("fee-deleg-req-preview-requester").textContent = feeDelegRequestGenerated.requesterAddress;
+      document.getElementById("fee-deleg-req-preview-recipient").textContent = feeDelegRequestGenerated.recipientAddress;
+      document.getElementById("fee-deleg-req-preview-mosaic").textContent =
+        `${feeDelegRequestGenerated.mosaicName} (${feeDelegRequestGenerated.mosaicId})`;
+      document.getElementById("fee-deleg-req-preview-amount").textContent = feeDelegRequestGenerated.amountDisplay;
+      document.getElementById("fee-deleg-req-preview").style.display = "block";
+      setStatus("fee-deleg-req-status", "依頼JSONを作成しました。オーナーへ渡してください。", "success");
+    } catch (e) {
+      console.error("createSponsorshipRequest error:", e);
+      feeDelegRequestGenerated = null;
+      document.getElementById("fee-deleg-req-preview").style.display = "none";
+      setStatus("fee-deleg-req-status", e.message || "作成に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("fee-deleg-req-download-btn")?.addEventListener("click", () => {
+    if (!feeDelegRequestGenerated) return;
+    downloadSponsorshipRequestJson(feeDelegRequestGenerated);
+  });
+
+  document.getElementById("fee-deleg-req-copy-btn")?.addEventListener("click", () => {
+    if (!feeDelegRequestGenerated) return;
+    navigator.clipboard.writeText(JSON.stringify(feeDelegRequestGenerated, null, 2));
+    showPopup("依頼JSONをコピーしました");
+  });
+
+  // ユーザー画面のタブ切替
+  setupTabGroup(
+    ["fee-deleg-user-tab-send", "fee-deleg-user-tab-status", "fee-deleg-user-tab-history"],
+    ["fee-deleg-user-content-send", "fee-deleg-user-content-status", "fee-deleg-user-content-history"],
+    [
+      null,
+      () => loadPendingPartialTransactions("fee-deleg-user-status-list"),
+      () => loadRecentTx("fee-deleg-user-history-list"),
+    ]
+  );
+
+  // ユーザー画面: コサインボタン(マルチシグ署名と同じ仕組み)
+  document.getElementById("fee-deleg-user-status-list")?.addEventListener("click", async e => {
+    const btn = e.target.closest('[data-action="cosign"]');
+    if (!btn) return;
+
+    const hash = btn.dataset.hash;
+    btn.disabled = true;
+    btn.textContent = "署名中...";
+    try {
+      await cosignPending(hash);
+      alert("✅ 送金が完了しました(コサインを送信しました)。");
+      await loadPendingPartialTransactions("fee-deleg-user-status-list");
+    } catch (e) {
+      console.error("cosignPending error:", e);
+      if (!e?.cancelled) alert(e.message || "連署に失敗しました。");
+      btn.disabled = false;
+      btn.textContent = "署名する";
+    }
+  });
+
+  // --- オーナー画面 ---
+  document.getElementById("menu-fee-delegation-owner")?.addEventListener("click", async () => {
+    document.getElementById("fee-deleg-owner-balance").textContent =
+      document.getElementById("account-balance")?.textContent || "---";
+    document.getElementById("fee-deleg-owner-request-file").value = "";
+    document.getElementById("fee-deleg-owner-request-preview").style.display = "none";
+    setStatus("fee-deleg-owner-request-status", "", "default");
+    showPage(feeDelegationOwnerPage);
+    await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
+  });
+  document.getElementById("back-fee-delegation-menu-owner")?.addEventListener("click", () => showPage(feeDelegationMenuPage));
+
+  let feeDelegRequestLoaded = null;
+
+  document.getElementById("fee-deleg-owner-request-file")?.addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      feeDelegRequestLoaded = parseSponsorshipRequestJson(text);
+
+      document.getElementById("fee-deleg-owner-preview-requester").textContent = feeDelegRequestLoaded.requesterAddress;
+      document.getElementById("fee-deleg-owner-preview-recipient").textContent = feeDelegRequestLoaded.recipientAddress;
+      document.getElementById("fee-deleg-owner-preview-mosaic").textContent =
+        `${feeDelegRequestLoaded.mosaicName ?? feeDelegRequestLoaded.mosaicId} (${feeDelegRequestLoaded.mosaicId})`;
+      document.getElementById("fee-deleg-owner-preview-amount").textContent = feeDelegRequestLoaded.amountDisplay;
+      document.getElementById("fee-deleg-owner-preview-message").textContent = feeDelegRequestLoaded.message || "(なし)";
+      document.getElementById("fee-deleg-owner-request-preview").style.display = "block";
+      setStatus("fee-deleg-owner-request-status", "", "default");
+    } catch (e) {
+      console.error("parseSponsorshipRequestJson error:", e);
+      feeDelegRequestLoaded = null;
+      document.getElementById("fee-deleg-owner-request-preview").style.display = "none";
+      setStatus("fee-deleg-owner-request-status", e.message || "読み込みに失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("fee-deleg-owner-approve-btn")?.addEventListener("click", async () => {
+    if (!feeDelegRequestLoaded) return;
+
+    setStatus("fee-deleg-owner-request-status", "確認画面を表示しています...");
+    try {
+      const hash = await approveSponsorshipRequest(feeDelegRequestLoaded);
+      setStatus(
+        "fee-deleg-owner-request-status",
+        `✅ アナウンスしました。依頼者がコサインすると送金が完了します。Hash: ${hash}`,
+        "success"
+      );
+      document.getElementById("fee-deleg-owner-request-file").value = "";
+      document.getElementById("fee-deleg-owner-request-preview").style.display = "none";
+      feeDelegRequestLoaded = null;
+      await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
+    } catch (e) {
+      if (e?.cancelled) {
+        setStatus("fee-deleg-owner-request-status", "キャンセルしました。");
+        return;
+      }
+      console.error("approveSponsorshipRequest error:", e);
+      setStatus("fee-deleg-owner-request-status", e.message || "処理に失敗しました。", "error");
+    }
+  });
+
+  // オーナー画面のタブ切替
+  setupTabGroup(
+    ["fee-deleg-owner-tab-pending", "fee-deleg-owner-tab-locks", "fee-deleg-owner-tab-settings", "fee-deleg-owner-tab-log"],
+    ["fee-deleg-owner-content-pending", "fee-deleg-owner-content-locks", "fee-deleg-owner-content-settings", "fee-deleg-owner-content-log"],
+    [
+      () => loadPendingPartialTransactions("fee-deleg-owner-pending-list"),
+      null,
+      null,
+      null,
+    ]
+  );
+
+  // オーナー画面: コサイン待ち一覧のコサインボタン
+  document.getElementById("fee-deleg-owner-pending-list")?.addEventListener("click", async e => {
+    const btn = e.target.closest('[data-action="cosign"]');
+    if (!btn) return;
+
+    const hash = btn.dataset.hash;
+    btn.disabled = true;
+    btn.textContent = "署名中...";
+    try {
+      await cosignPending(hash);
+      alert("✅ 連署を送信しました。");
+      await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
+    } catch (e) {
+      console.error("cosignPending error:", e);
+      if (!e?.cancelled) alert(e.message || "連署に失敗しました。");
+      btn.disabled = false;
+      btn.textContent = "署名する";
+    }
+  });
+
+  async function updateRootNamespaceFeeEstimate() {
     const el = document.getElementById("root-namespace-fee-estimate");
+    const rentalEl = document.getElementById("root-namespace-rental-fee-estimate");
     if (!el) return;
     const name = document.getElementById("root-namespace-name").value.trim();
     const duration = parseInt(document.getElementById("root-namespace-duration").value, 10);
     if (!name || !Number.isInteger(duration) || duration <= 0) {
       el.textContent = "---";
+      if (rentalEl) rentalEl.textContent = "---";
       return;
     }
     try {
       el.textContent = `約 ${estimateRootNamespaceFee(name, duration)} XYM`;
     } catch {
       el.textContent = "---";
+    }
+    if (rentalEl) {
+      try {
+        rentalEl.textContent = `約 ${await estimateRootNamespaceRentalFee(duration)} XYM`;
+      } catch {
+        rentalEl.textContent = "---";
+      }
     }
   }
 
@@ -1353,19 +1570,28 @@ window.addEventListener("load", async () => {
     }
   });
 
-  function updateSubNamespaceFeeEstimate() {
+  async function updateSubNamespaceFeeEstimate() {
     const el = document.getElementById("sub-namespace-fee-estimate");
+    const rentalEl = document.getElementById("sub-namespace-rental-fee-estimate");
     if (!el) return;
     const parentId = document.getElementById("sub-namespace-parent-select").value;
     const subName = document.getElementById("sub-namespace-name").value.trim();
     if (!parentId || !subName) {
       el.textContent = "---";
+      if (rentalEl) rentalEl.textContent = "---";
       return;
     }
     try {
       el.textContent = `約 ${estimateSubNamespaceFee(parentId, subName)} XYM`;
     } catch {
       el.textContent = "---";
+    }
+    if (rentalEl) {
+      try {
+        rentalEl.textContent = `約 ${await estimateSubNamespaceRentalFee()} XYM`;
+      } catch {
+        rentalEl.textContent = "---";
+      }
     }
   }
 
@@ -1582,14 +1808,22 @@ window.addEventListener("load", async () => {
     };
   }
 
-  function updateMosaicFeeEstimate() {
+  async function updateMosaicFeeEstimate() {
     const el = document.getElementById("mosaic-fee-estimate");
+    const rentalEl = document.getElementById("mosaic-rental-fee-estimate");
     if (!el) return;
     try {
       const { feeXym } = estimateMosaicCreationFee(readMosaicFormOptions());
       el.textContent = `約 ${feeXym} XYM`;
     } catch (e) {
       el.textContent = "---";
+    }
+    if (rentalEl) {
+      try {
+        rentalEl.textContent = `約 ${await estimateMosaicRentalFee()} XYM`;
+      } catch {
+        rentalEl.textContent = "---";
+      }
     }
   }
 

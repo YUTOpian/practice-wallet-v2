@@ -232,8 +232,9 @@ function appendTx(txInfo) {
 /* ============================================================
    直近10件取得 (Symbol v3 REST API)
 ============================================================ */
-export async function loadRecentTx() {
-  const el = document.getElementById("tx-list");
+export async function loadRecentTx(elId = "tx-list") {
+  const el = document.getElementById(elId);
+  if (!el) return;
   el.textContent = "読み込み中…";
 
   const address = appState.currentAddress.toString();

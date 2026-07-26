@@ -6,6 +6,9 @@ import { setStatus } from "./ui.js";
 import { formatMosaicAmount } from "./utils.js";
 import { signAndAnnounceTx, estimateFeeFromTx } from "./auth.js";
 import { fetchOwnedNamespaceOptions } from "./namespace.js";
+import { estimateMosaicRentalFee } from "./rentalFees.js";
+
+export { estimateMosaicRentalFee };
 
 // Symbolのブロック目標間隔(秒)。メインネット/テストネットともに30秒。
 const BLOCK_TARGET_SECONDS = 30;
@@ -326,6 +329,13 @@ export async function createMosaic(options) {
     linkNamespaceIdHex,
   } = options;
 
+  let rentalFeeXym = "---";
+  try {
+    rentalFeeXym = await estimateMosaicRentalFee();
+  } catch (e) {
+    console.warn("レンタル手数料の取得に失敗しました", e);
+  }
+
   return await signAndAnnounceTx(tx, {
     typeLabel: "モザイク作成",
     details: [
@@ -336,6 +346,7 @@ export async function createMosaic(options) {
       { label: "第三者へ譲渡可能", value: transferable ? "はい" : "いいえ" },
       { label: "制限設定可能", value: restrictable ? "はい" : "いいえ" },
       { label: "取り消し可能", value: revokable ? "はい" : "いいえ" },
+      { label: "推定レンタル手数料", value: `約 ${rentalFeeXym} XYM` },
       ...(linkNamespaceIdHex
         ? [{ label: "リンク先ネームスペースID", value: linkNamespaceIdHex.toUpperCase() }]
         : []),

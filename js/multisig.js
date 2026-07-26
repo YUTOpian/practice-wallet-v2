@@ -46,7 +46,7 @@ async function waitConfirmed(hash, { timeoutMs = 90000, intervalMs = 3000 } = {}
    ハッシュロック → 承認待ち → /transactions/partial アナウンス
    まで一括で行う共通処理
 ============================================================ */
-async function proposeBondedAggregate(embeddedTransactions, cosignerCount, confirmInfo) {
+export async function proposeBondedAggregate(embeddedTransactions, cosignerCount, confirmInfo) {
   const { descriptors, models } = appState.sdkSymbol;
 
   const aggregateDescriptor = new descriptors.AggregateBondedTransactionV2Descriptor(
@@ -275,8 +275,8 @@ export async function sendFromMultisig({ multisigAddress, recipientAddress, amou
 /* ============================================================
    マルチシグ署名(保留中のアグリゲートボンデッドTx一覧・連署)
 ============================================================ */
-export async function loadPendingPartialTransactions() {
-  const el = document.getElementById("multisig-pending-list");
+export async function loadPendingPartialTransactions(elId = "multisig-pending-list") {
+  const el = document.getElementById(elId);
   if (!el) return;
 
   el.textContent = "読み込み中...";

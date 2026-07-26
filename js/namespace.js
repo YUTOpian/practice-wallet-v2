@@ -6,6 +6,9 @@
 
 import { appState } from "./config.js";
 import { signAndAnnounceTx, estimateFeeFromTx } from "./auth.js";
+import { estimateRootNamespaceRentalFee, estimateSubNamespaceRentalFee } from "./rentalFees.js";
+
+export { estimateRootNamespaceRentalFee, estimateSubNamespaceRentalFee };
 
 /* ============================================================
    このネームスペース自身のID(16進)を depth に応じて正しく取り出す
@@ -197,11 +200,19 @@ export function estimateRootNamespaceFee(name, durationBlocks) {
 
 export async function registerRootNamespace(name, durationBlocks) {
   const tx = buildRootNamespaceTx(name, durationBlocks);
+  let rentalFeeXym = "---";
+  try {
+    rentalFeeXym = await estimateRootNamespaceRentalFee(durationBlocks);
+  } catch (e) {
+    console.warn("レンタル手数料の取得に失敗しました", e);
+  }
+
   return await signAndAnnounceTx(tx, {
     typeLabel: "ネームスペース登録(ルート)",
     details: [
       { label: "ネームスペース名", value: name },
       { label: "登録期間", value: `${durationBlocks} ブロック` },
+      { label: "推定レンタル手数料", value: `約 ${rentalFeeXym} XYM` },
     ],
   });
 }
@@ -239,11 +250,19 @@ export function estimateSubNamespaceFee(parentIdHex, subName) {
 
 export async function registerSubNamespace(parentIdHex, subName) {
   const tx = buildSubNamespaceTx(parentIdHex, subName);
+  let rentalFeeXym = "---";
+  try {
+    rentalFeeXym = await estimateSubNamespaceRentalFee();
+  } catch (e) {
+    console.warn("レンタル手数料の取得に失敗しました", e);
+  }
+
   return await signAndAnnounceTx(tx, {
     typeLabel: "ネームスペース登録(サブ)",
     details: [
       { label: "親ネームスペースID", value: parentIdHex.toUpperCase() },
       { label: "サブネームスペース名", value: subName },
+      { label: "推定レンタル手数料", value: `約 ${rentalFeeXym} XYM` },
     ],
   });
 }
