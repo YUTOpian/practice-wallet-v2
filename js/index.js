@@ -99,6 +99,9 @@ import {
   downloadSponsorshipRequestJson,
   parseSponsorshipRequestJson,
   approveSponsorshipRequest,
+  buildCosignInfo,
+  downloadCosignInfoJson,
+  parseCosignInfoJson,
 } from "./feeDelegation.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
@@ -1326,6 +1329,8 @@ window.addEventListener("load", async () => {
       : `<option value="">-- 保有モザイクがありません --</option>`;
   }
 
+  let feeDelegCosignInfoLoaded = null;
+
   document.getElementById("menu-fee-delegation-user")?.addEventListener("click", async () => {
     document.getElementById("fee-deleg-user-balance").textContent =
       document.getElementById("account-balance")?.textContent || "---";
@@ -1333,7 +1338,7 @@ window.addEventListener("load", async () => {
     document.getElementById("fee-deleg-req-preview").style.display = "none";
     setStatus("fee-deleg-req-status", "", "default");
     showPage(feeDelegationUserPage);
-    await loadPendingPartialTransactions("fee-deleg-user-status-list");
+    await loadPendingPartialTransactions("fee-deleg-user-status-list", feeDelegCosignInfoLoaded);
   });
   document.getElementById("back-fee-delegation-menu-user")?.addEventListener("click", () => showPage(feeDelegationMenuPage));
 
@@ -1380,23 +1385,48 @@ window.addEventListener("load", async () => {
     ["fee-deleg-user-content-send", "fee-deleg-user-content-status", "fee-deleg-user-content-history"],
     [
       null,
-      () => loadPendingPartialTransactions("fee-deleg-user-status-list"),
+      () => loadPendingPartialTransactions("fee-deleg-user-status-list", feeDelegCosignInfoLoaded),
       () => loadRecentTx("fee-deleg-user-history-list"),
     ]
   );
 
+  // ユーザー画面: オーナーから受け取った「コサイン情報」の読み込み
+  // (自分の接続ノードにまだ伝播していない場合でも、指定ノードから直接確認できる)
+  document.getElementById("fee-deleg-user-cosign-info-file")?.addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      feeDelegCosignInfoLoaded = parseCosignInfoJson(text);
+      setStatus(
+        "fee-deleg-user-cosign-info-status",
+        `✅ 読み込みました。指定ノードを確認します… (Hash: ${feeDelegCosignInfoLoaded.aggregateHash})`,
+        "success"
+      );
+      await loadPendingPartialTransactions("fee-deleg-user-status-list", feeDelegCosignInfoLoaded);
+    } catch (e) {
+      console.error("parseCosignInfoJson error:", e);
+      feeDelegCosignInfoLoaded = null;
+      setStatus("fee-deleg-user-cosign-info-status", e.message || "読み込みに失敗しました。", "error");
+    }
+  });
+
   // ユーザー画面: コサインボタン(マルチシグ署名と同じ仕組み)
+  // data-node が付いている場合(コサイン情報から直接取得した項目)は、
+  // 自分の接続ノードではなく、そのノードへ直接コサインをアナウンスする。
   document.getElementById("fee-deleg-user-status-list")?.addEventListener("click", async e => {
     const btn = e.target.closest('[data-action="cosign"]');
     if (!btn) return;
 
     const hash = btn.dataset.hash;
+    const nodeOverride = btn.dataset.node || null;
     btn.disabled = true;
     btn.textContent = "署名中...";
     try {
-      await cosignPending(hash);
+      await cosignPending(hash, nodeOverride);
       alert("✅ 送金が完了しました(コサインを送信しました)。");
-      await loadPendingPartialTransactions("fee-deleg-user-status-list");
+      await loadPendingPartialTransactions("fee-deleg-user-status-list", feeDelegCosignInfoLoaded);
     } catch (e) {
       console.error("cosignPending error:", e);
       if (!e?.cancelled) alert(e.message || "連署に失敗しました。");
@@ -1411,6 +1441,7 @@ window.addEventListener("load", async () => {
       document.getElementById("account-balance")?.textContent || "---";
     document.getElementById("fee-deleg-owner-request-file").value = "";
     document.getElementById("fee-deleg-owner-request-preview").style.display = "none";
+    document.getElementById("fee-deleg-owner-cosign-info").style.display = "none";
     setStatus("fee-deleg-owner-request-status", "", "default");
     showPage(feeDelegationOwnerPage);
     await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
@@ -1418,6 +1449,7 @@ window.addEventListener("load", async () => {
   document.getElementById("back-fee-delegation-menu-owner")?.addEventListener("click", () => showPage(feeDelegationMenuPage));
 
   let feeDelegRequestLoaded = null;
+  let feeDelegCosignInfoGenerated = null;
 
   document.getElementById("fee-deleg-owner-request-file")?.addEventListener("change", async e => {
     const file = e.target.files?.[0];
@@ -1448,7 +1480,14 @@ window.addEventListener("load", async () => {
 
     setStatus("fee-deleg-owner-request-status", "確認画面を表示しています...");
     try {
+      const requestSnapshot = feeDelegRequestLoaded;
       const hash = await approveSponsorshipRequest(feeDelegRequestLoaded);
+
+      // アグリゲートボンデッドTxは、このノードのローカルキャッシュにのみ載る。
+      // 依頼者が別ノードに接続していると「支払い状況」タブに表示されないことが
+      // あるため、ノード情報を含む「コサイン情報」を発行し、渡せるようにする。
+      feeDelegCosignInfoGenerated = buildCosignInfo(requestSnapshot, hash);
+
       setStatus(
         "fee-deleg-owner-request-status",
         `✅ アナウンスしました。依頼者がコサインすると送金が完了します。Hash: ${hash}`,
@@ -1457,6 +1496,11 @@ window.addEventListener("load", async () => {
       document.getElementById("fee-deleg-owner-request-file").value = "";
       document.getElementById("fee-deleg-owner-request-preview").style.display = "none";
       feeDelegRequestLoaded = null;
+
+      document.getElementById("fee-deleg-owner-cosign-info-hash").textContent = hash;
+      document.getElementById("fee-deleg-owner-cosign-info-node").textContent = feeDelegCosignInfoGenerated.node;
+      document.getElementById("fee-deleg-owner-cosign-info").style.display = "block";
+
       await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
     } catch (e) {
       if (e?.cancelled) {
@@ -1466,6 +1510,17 @@ window.addEventListener("load", async () => {
       console.error("approveSponsorshipRequest error:", e);
       setStatus("fee-deleg-owner-request-status", e.message || "処理に失敗しました。", "error");
     }
+  });
+
+  document.getElementById("fee-deleg-owner-cosign-info-download-btn")?.addEventListener("click", () => {
+    if (!feeDelegCosignInfoGenerated) return;
+    downloadCosignInfoJson(feeDelegCosignInfoGenerated);
+  });
+
+  document.getElementById("fee-deleg-owner-cosign-info-copy-btn")?.addEventListener("click", () => {
+    if (!feeDelegCosignInfoGenerated) return;
+    navigator.clipboard.writeText(JSON.stringify(feeDelegCosignInfoGenerated, null, 2));
+    showPopup("コサイン情報をコピーしました");
   });
 
   // オーナー画面のタブ切替
@@ -1486,10 +1541,11 @@ window.addEventListener("load", async () => {
     if (!btn) return;
 
     const hash = btn.dataset.hash;
+    const nodeOverride = btn.dataset.node || null;
     btn.disabled = true;
     btn.textContent = "署名中...";
     try {
-      await cosignPending(hash);
+      await cosignPending(hash, nodeOverride);
       alert("✅ 連署を送信しました。");
       await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
     } catch (e) {

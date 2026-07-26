@@ -114,6 +114,78 @@ export function parseSponsorshipRequestJson(text) {
 }
 
 /* ============================================================
+   ② オーナー側: 承認・アナウンス後に依頼者(ユーザー)へ返す「コサイン情報」
+
+   アグリゲートボンデッドTxは、アナウンスしたノードのローカルキャッシュに
+   載るだけで、他ノードへの伝播にはP2P同期の時間差がある(伝播しない
+   こともある)。ユーザーがオーナーと別のノードに接続していると、
+   「支払い状況」タブのアドレス検索だけでは見つからず、連署できないまま
+   ハッシュロック・アグリゲート双方が期限切れになってしまう。
+   これを避けるため、実際にアナウンスしたノードとアグリゲートハッシュを
+   ここでファイル化し、依頼JSONと同じ要領でユーザーへ渡せるようにする。
+============================================================ */
+export const FEE_DELEGATION_COSIGN_INFO_TYPE = "KASANE_FEE_DELEGATION_COSIGN_INFO";
+export const FEE_DELEGATION_COSIGN_INFO_VERSION = 1;
+
+export function buildCosignInfo(request, aggregateHash) {
+  return {
+    type: FEE_DELEGATION_COSIGN_INFO_TYPE,
+    version: FEE_DELEGATION_COSIGN_INFO_VERSION,
+    chain: "Symbol",
+    network: request.network,
+    aggregateHash,
+    node: appState.NODE,
+    requesterAddress: request.requesterAddress,
+    recipientAddress: request.recipientAddress,
+    mosaicId: request.mosaicId,
+    mosaicName: request.mosaicName,
+    amountDisplay: request.amountDisplay,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function downloadCosignInfoJson(cosignInfoObject) {
+  const blob = new Blob([JSON.stringify(cosignInfoObject, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cosign-info-${(cosignInfoObject.aggregateHash || "unknown").slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* ============================================================
+   ③ ユーザー側: オーナーから受け取った「コサイン情報」JSONの形式検証
+============================================================ */
+export function parseCosignInfoJson(text) {
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error("JSONの形式が正しくありません。");
+  }
+
+  if (json.type !== FEE_DELEGATION_COSIGN_INFO_TYPE) {
+    throw new Error(`対応していないファイル形式です(type: ${json.type ?? "不明"})。`);
+  }
+  if (!json.aggregateHash || !json.node) {
+    throw new Error("コサイン情報が不足しています(aggregateHash / node が必要です)。");
+  }
+  if (json.network !== "MAIN_NET" && json.network !== "TEST_NET") {
+    throw new Error("networkの値が不正です。");
+  }
+
+  const expectedNetwork = appState.networkType === NetworkType.TESTNET ? "TEST_NET" : "MAIN_NET";
+  if (json.network !== expectedNetwork) {
+    throw new Error("現在接続中のネットワークとファイルのネットワークが一致しません。");
+  }
+
+  return json;
+}
+
+/* ============================================================
    ② オーナー側: 依頼を承認し、アグリゲートボンデッドTxを構築・署名・
    ハッシュロック支払い・アナウンスする(すべての手数料はオーナー負担)。
    ユーザーは埋め込みTransferの署名者になっているだけなので、

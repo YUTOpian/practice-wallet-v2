@@ -16,7 +16,23 @@ import { hexToBytes } from "./utils.js";
 import { requestTxConfirmation, formatTxDeadline, TxCancelledError } from "./txConfirm.js";
 
 const HASH_LOCK_AMOUNT = 10_000_000n; // 10 XYM (microXYM)
-const HASH_LOCK_DURATION = 480n; // 約4時間分のブロック数(目安)
+
+// アグリゲートボンデッドTx本体の有効期限(秒)。proposeBondedAggregate内の
+// createTransactionFromTypedDescriptor() 呼び出しと必ず同じ値を使うこと。
+const AGGREGATE_BONDED_DEADLINE_SECONDS = 60 * 60 * 6; // 6時間
+
+// ブロック生成間隔(秒)。メインネット/テストネットともに30秒。
+const BLOCK_TARGET_SECONDS = 30;
+
+// ハッシュロックの有効期間(ブロック数)。
+// ★ここは必ずアグリゲート本体の有効期限(AGGREGATE_BONDED_DEADLINE_SECONDS)より
+//   長くすること。短いと、有効期限ぎりぎりで連署が集まった際に
+//   ハッシュロックの担保が先に失効・返却されてしまい、アグリゲートTxが
+//   確定できずに送金が失敗する(連署者からは「見えていたのに送れなかった」
+//   ように見えるバグの原因になる)。念のため1時間分の余裕を持たせる。
+const HASH_LOCK_DURATION = BigInt(
+  Math.ceil(AGGREGATE_BONDED_DEADLINE_SECONDS / BLOCK_TARGET_SECONDS) + Math.ceil(3600 / BLOCK_TARGET_SECONDS)
+); // 6時間 + 1時間の余裕 ≒ 840ブロック
 
 /* ============================================================
    承認待ちポーリング(ハッシュロックの確定待ち)
@@ -58,7 +74,7 @@ export async function proposeBondedAggregate(embeddedTransactions, cosignerCount
     aggregateDescriptor,
     appState.currentPubKey,
     appState.feeMultiplier ?? 100,
-    60 * 60 * 6, // 6時間
+    AGGREGATE_BONDED_DEADLINE_SECONDS,
     cosignerCount
   );
 
@@ -274,8 +290,62 @@ export async function sendFromMultisig({ multisigAddress, recipientAddress, amou
 
 /* ============================================================
    マルチシグ署名(保留中のアグリゲートボンデッドTx一覧・連署)
+
+   ⚠ アグリゲートボンデッドTxは、アナウンスされたノードのローカルな
+   「partial」キャッシュに載るだけで、他ノードへの伝播にはP2P同期の
+   時間差がある(伝播しないケースもある)。そのため、連署する側が
+   アナウンスした側と別のノードに接続していると、この一覧に
+   何も表示されないことがある。これを補うため、相手から渡された
+   「コサイン情報」(ハッシュ＋アナウンス先ノード)がある場合は、
+   そのノードへ直接ハッシュ指定で問い合わせて表示する
+   (externalHash 引数、feeDelegation.js から利用)。
 ============================================================ */
-export async function loadPendingPartialTransactions(elId = "multisig-pending-list") {
+
+// 1件分のカードHTML(一覧表示・直接取得表示の両方で共通利用)
+function renderPendingItemHtml(hash, transaction, nodeUrl) {
+  const cosigCount = (transaction.cosignatures || []).length;
+  const alreadySigned = (transaction.cosignatures || []).some(
+    (c) => c.signerPublicKey?.toUpperCase() === appState.currentPubKey?.toUpperCase()
+  );
+
+  return `
+    <div class="harvest-history-item">
+      <div>Hash: ${hash}</div>
+      <div>現在の連署数: ${cosigCount}</div>
+      <div>${alreadySigned ? "✅ 署名済み" : ""}</div>
+      ${
+        alreadySigned
+          ? ""
+          : `<button class="account-hide-btn" data-action="cosign" data-hash="${hash}" data-node="${nodeUrl ?? ""}">署名する</button>`
+      }
+    </div>
+  `;
+}
+
+/* ============================================================
+   指定ノードから、指定ハッシュの連署待ち(partial)Txを1件だけ直接取得する。
+   アドレス検索(loadPendingPartialTransactions)に頼らないため、
+   そのノードのキャッシュに載ってさえいれば、自分の接続ノードとは
+   無関係に見つけられる。
+============================================================ */
+export async function fetchPartialTransactionByHash(nodeUrl, hash) {
+  if (!nodeUrl || !hash) return null;
+  try {
+    const res = await fetch(`${nodeUrl}/transactions/partial/${hash}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json?.transaction ? json : null;
+  } catch (e) {
+    console.warn("fetchPartialTransactionByHash error:", nodeUrl, e);
+    return null;
+  }
+}
+
+/* ============================================================
+   externalHash: { hash, node } を渡すと、通常のアドレス検索結果に
+   含まれていなかった場合のみ、そのノードへ直接問い合わせて追加表示する。
+============================================================ */
+export async function loadPendingPartialTransactions(elId = "multisig-pending-list", externalHash = null) {
   const el = document.getElementById(elId);
   if (!el) return;
 
@@ -288,43 +358,52 @@ export async function loadPendingPartialTransactions(elId = "multisig-pending-li
     const json = await res.json();
     const items = json.data ?? [];
 
-    if (items.length === 0) {
+    let externalHtml = "";
+    if (externalHash?.hash) {
+      const alreadyListed = items.some(
+        (item) => item.meta?.hash?.toUpperCase() === externalHash.hash.toUpperCase()
+      );
+      if (!alreadyListed) {
+        const targetNode = externalHash.node || appState.NODE;
+        const found = await fetchPartialTransactionByHash(targetNode, externalHash.hash);
+        if (found?.transaction) {
+          externalHtml =
+            `<div style="color:#facc15;font-size:12px;">🔎 指定ノード(${targetNode})から直接見つかりました(自分の接続ノードにはまだ反映されていない可能性があります)</div>` +
+            renderPendingItemHtml(externalHash.hash, found.transaction, targetNode);
+        }
+      }
+    }
+
+    if (items.length === 0 && !externalHtml) {
       el.innerHTML = `<div style="color:#94a3b8;">署名待ちのトランザクションはありません</div>`;
       return;
     }
 
-    el.innerHTML = items
-      .map((item) => {
-        const hash = item.meta.hash;
-        const cosigCount = (item.transaction.cosignatures || []).length;
-        const alreadySigned = (item.transaction.cosignatures || []).some(
-          (c) => c.signerPublicKey?.toUpperCase() === appState.currentPubKey?.toUpperCase()
-        );
-
-        return `
-          <div class="harvest-history-item">
-            <div>Hash: ${hash}</div>
-            <div>現在の連署数: ${cosigCount}</div>
-            <div>${alreadySigned ? "✅ 署名済み" : ""}</div>
-            ${
-              alreadySigned
-                ? ""
-                : `<button class="account-hide-btn" data-action="cosign" data-hash="${hash}">署名する</button>`
-            }
-          </div>
-        `;
-      })
+    const listHtml = items
+      .map((item) => renderPendingItemHtml(item.meta.hash, item.transaction, appState.NODE))
       .join("");
+
+    el.innerHTML = externalHtml + listHtml;
   } catch (e) {
     console.error("loadPendingPartialTransactions error:", e);
     el.textContent = "取得に失敗しました";
   }
 }
 
-export async function cosignPending(transactionHashHex) {
+/* ============================================================
+   nodeUrlOverride を指定すると、そのノードへ直接コサインをアナウンスする
+   (相手から伝えられた「アナウンス先ノード」に確実に届けるため)。
+   省略時は従来通り自分の接続中ノード(appState.NODE)を使う。
+============================================================ */
+export async function cosignPending(transactionHashHex, nodeUrlOverride = null) {
+  const nodeUrl = nodeUrlOverride || appState.NODE;
+
   const confirmed = await requestTxConfirmation({
     typeLabel: "マルチシグ連署(承認)",
-    details: [{ label: "対象トランザクションHash", value: transactionHashHex }],
+    details: [
+      { label: "対象トランザクションHash", value: transactionHashHex },
+      ...(nodeUrlOverride ? [{ label: "アナウンス先ノード", value: nodeUrl }] : []),
+    ],
   });
   if (!confirmed) {
     throw new TxCancelledError();
@@ -332,7 +411,7 @@ export async function cosignPending(transactionHashHex) {
 
   const cosignature = cosignTransactionHash(transactionHashHex);
 
-  const res = await fetch(new URL("/transactions/cosignature", appState.NODE), {
+  const res = await fetch(new URL("/transactions/cosignature", nodeUrl), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(cosignature),
