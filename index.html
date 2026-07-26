@@ -1419,6 +1419,40 @@
 
 </div>
 
+<!-- ============================================================
+     トランザクション確認ダイアログ(共通)
+     送金・ネームスペース登録・モザイク作成・マルチシグ提案など、
+     ノードへブロードキャストする直前に必ずこの画面を経由する。
+============================================================ -->
+<dialog id="tx-confirm-dialog">
+  <div class="card">
+    <h2>トランザクション確認</h2>
+    <p style="font-size:13px;color:#94a3b8;">
+      以下の内容でブロードキャストします。よろしければ「確認してブロードキャスト」を押してください。
+    </p>
+
+    <div class="confirm-tx-row"><b>種別：</b><span id="confirm-tx-type">---</span></div>
+    <div class="confirm-tx-row"><b>送信元：</b><span id="confirm-tx-sender" style="word-break:break-all;">---</span></div>
+    <div id="confirm-tx-recipient-row" class="confirm-tx-row" style="display:none;">
+      <b>送信先：</b><span id="confirm-tx-recipient" style="word-break:break-all;">---</span>
+    </div>
+
+    <div id="confirm-tx-details"></div>
+
+    <div id="confirm-tx-fee-row" class="confirm-tx-row" style="display:none;">
+      <b>手数料：</b><span id="confirm-tx-fee">---</span> XYM
+    </div>
+    <div id="confirm-tx-deadline-row" class="confirm-tx-row" style="display:none;">
+      <b>有効期限：</b><span id="confirm-tx-deadline">---</span>
+    </div>
+
+    <div class="confirm-tx-actions">
+      <button id="confirm-tx-cancel-btn" class="account-hide-btn">キャンセル</button>
+      <button id="confirm-tx-ok-btn" class="button-primary">確認してブロードキャスト</button>
+    </div>
+  </div>
+</dialog>
+
 <script type="module" src="js/index.js"></script>
 
 </body>
