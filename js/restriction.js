@@ -74,7 +74,7 @@ function buildFlags(restrictionType, block, outgoing) {
 async function submitRestriction(descriptor, confirmInfo) {
   const embedded = appState.facade.createEmbeddedTransactionFromTypedDescriptor(descriptor, appState.currentPubKey);
 
-  const aggregateDescriptor = new appState.sdkSymbol.descriptors.AggregateCompleteTransactionV2Descriptor(
+  const aggregateDescriptor = new appState.sdkSymbol.descriptors.AggregateCompleteTransactionV3Descriptor(
     appState.facade.static.hashEmbeddedTransactions([embedded]),
     [embedded]
   );

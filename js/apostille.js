@@ -77,7 +77,7 @@ export async function createApostille({ file, fileHashHex, ownerAddress, metadat
     );
   }
 
-  const aggregateDescriptor = new descriptors.AggregateCompleteTransactionV2Descriptor(
+  const aggregateDescriptor = new descriptors.AggregateCompleteTransactionV3Descriptor(
     appState.facade.static.hashEmbeddedTransactions(embedded),
     embedded
   );

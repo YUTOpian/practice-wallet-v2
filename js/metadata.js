@@ -95,7 +95,7 @@ export async function setMetadata(targetType, targetIdHex, keyString, valueStrin
     appState.facade.createEmbeddedTransactionFromTypedDescriptor(descriptor, appState.currentPubKey),
   ];
 
-  const aggregateDescriptor = new descriptors.AggregateCompleteTransactionV2Descriptor(
+  const aggregateDescriptor = new descriptors.AggregateCompleteTransactionV3Descriptor(
     appState.facade.static.hashEmbeddedTransactions(embedded),
     embedded
   );

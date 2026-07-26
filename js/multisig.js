@@ -65,7 +65,7 @@ async function waitConfirmed(hash, { timeoutMs = 90000, intervalMs = 3000 } = {}
 export async function proposeBondedAggregate(embeddedTransactions, cosignerCount, confirmInfo) {
   const { descriptors, models } = appState.sdkSymbol;
 
-  const aggregateDescriptor = new descriptors.AggregateBondedTransactionV2Descriptor(
+  const aggregateDescriptor = new descriptors.AggregateBondedTransactionV3Descriptor(
     appState.facade.static.hashEmbeddedTransactions(embeddedTransactions),
     embeddedTransactions
   );
