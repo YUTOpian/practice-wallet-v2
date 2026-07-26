@@ -1331,6 +1331,15 @@ window.addEventListener("load", async () => {
 
   let feeDelegCosignInfoLoaded = null;
 
+  // feeDelegation.js の buildCosignInfo() / parseCosignInfoJson() が扱う
+  // コサイン情報は { aggregateHash, node } という形だが、
+  // multisig.js の loadPendingPartialTransactions() は汎用的に
+  // { hash, node } という形を期待しているため、ここでキー名を変換する。
+  function toExternalHashParam(cosignInfo) {
+    if (!cosignInfo) return null;
+    return { hash: cosignInfo.aggregateHash, node: cosignInfo.node };
+  }
+
   document.getElementById("menu-fee-delegation-user")?.addEventListener("click", async () => {
     document.getElementById("fee-deleg-user-balance").textContent =
       document.getElementById("account-balance")?.textContent || "---";
@@ -1338,7 +1347,7 @@ window.addEventListener("load", async () => {
     document.getElementById("fee-deleg-req-preview").style.display = "none";
     setStatus("fee-deleg-req-status", "", "default");
     showPage(feeDelegationUserPage);
-    await loadPendingPartialTransactions("fee-deleg-user-status-list", feeDelegCosignInfoLoaded);
+    await loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded));
   });
   document.getElementById("back-fee-delegation-menu-user")?.addEventListener("click", () => showPage(feeDelegationMenuPage));
 
@@ -1385,7 +1394,7 @@ window.addEventListener("load", async () => {
     ["fee-deleg-user-content-send", "fee-deleg-user-content-status", "fee-deleg-user-content-history"],
     [
       null,
-      () => loadPendingPartialTransactions("fee-deleg-user-status-list", feeDelegCosignInfoLoaded),
+      () => loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded)),
       () => loadRecentTx("fee-deleg-user-history-list"),
     ]
   );
@@ -1404,7 +1413,7 @@ window.addEventListener("load", async () => {
         `✅ 読み込みました。指定ノードを確認します… (Hash: ${feeDelegCosignInfoLoaded.aggregateHash})`,
         "success"
       );
-      await loadPendingPartialTransactions("fee-deleg-user-status-list", feeDelegCosignInfoLoaded);
+      await loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded));
     } catch (e) {
       console.error("parseCosignInfoJson error:", e);
       feeDelegCosignInfoLoaded = null;
@@ -1426,7 +1435,7 @@ window.addEventListener("load", async () => {
     try {
       await cosignPending(hash, nodeOverride);
       alert("✅ 送金が完了しました(コサインを送信しました)。");
-      await loadPendingPartialTransactions("fee-deleg-user-status-list", feeDelegCosignInfoLoaded);
+      await loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded));
     } catch (e) {
       console.error("cosignPending error:", e);
       if (!e?.cancelled) alert(e.message || "連署に失敗しました。");
