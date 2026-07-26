@@ -201,5 +201,17 @@ export async function sendMultiTransfer(rows) {
     60 * 60
   );
 
-  return await signAndAnnounceTx(tx);
+  const MAX_DETAIL_ROWS = 20;
+  const rowDetails = rows.slice(0, MAX_DETAIL_ROWS).map((row, i) => ({
+    label: `送金先 ${i + 1}`,
+    value: `${row.address} / ${row.mosaic} / ${row.amount}${row.message ? " / " + row.message : ""}`,
+  }));
+  if (rows.length > MAX_DETAIL_ROWS) {
+    rowDetails.push({ label: "その他", value: `他 ${rows.length - MAX_DETAIL_ROWS} 件` });
+  }
+
+  return await signAndAnnounceTx(tx, {
+    typeLabel: "複数送金",
+    details: [{ label: "送金先件数", value: `${rows.length} 件` }, ...rowDetails],
+  });
 }

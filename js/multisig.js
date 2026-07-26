@@ -11,8 +11,9 @@
 // 連署(cosign)して承認する、という設計にしている。
 
 import { appState, getXymMosaicIdHex } from "./config.js";
-import { signTxOnly, signAndAnnounceTx, cosignTransactionHash } from "./auth.js";
+import { signTxOnly, signAndAnnounceTx, cosignTransactionHash, estimateFeeFromTx } from "./auth.js";
 import { hexToBytes } from "./utils.js";
+import { requestTxConfirmation, formatTxDeadline, TxCancelledError } from "./txConfirm.js";
 
 const HASH_LOCK_AMOUNT = 10_000_000n; // 10 XYM (microXYM)
 const HASH_LOCK_DURATION = 480n; // 約4時間分のブロック数(目安)
@@ -45,7 +46,7 @@ async function waitConfirmed(hash, { timeoutMs = 90000, intervalMs = 3000 } = {}
    ハッシュロック → 承認待ち → /transactions/partial アナウンス
    まで一括で行う共通処理
 ============================================================ */
-async function proposeBondedAggregate(embeddedTransactions, cosignerCount) {
+async function proposeBondedAggregate(embeddedTransactions, cosignerCount, confirmInfo) {
   const { descriptors, models } = appState.sdkSymbol;
 
   const aggregateDescriptor = new descriptors.AggregateBondedTransactionV2Descriptor(
@@ -60,6 +61,26 @@ async function proposeBondedAggregate(embeddedTransactions, cosignerCount) {
     60 * 60 * 6, // 6時間
     cosignerCount
   );
+
+  // マルチシグの提案内容そのものの確認(実際の担保としてハッシュロックで10XYMが
+  // 一時的にロックされることも合わせて表示する)
+  if (confirmInfo) {
+    const confirmed = await requestTxConfirmation({
+      typeLabel: confirmInfo.typeLabel,
+      sender: confirmInfo.sender,
+      recipient: confirmInfo.recipient,
+      fee: estimateFeeFromTx(aggregateTx),
+      deadlineText: formatTxDeadline(aggregateTx),
+      details: [
+        ...(confirmInfo.details ?? []),
+        { label: "必要な追加連署者数", value: cosignerCount },
+        { label: "担保(ハッシュロック)", value: "10 XYM（承認完了、または期限切れで返却されます）" },
+      ],
+    });
+    if (!confirmed) {
+      throw new TxCancelledError();
+    }
+  }
 
   const { jsonPayload: aggregateJsonPayload, signedBytes } = await signTxOnly(aggregateTx);
   const signedAggregateTx = appState.facade.transactionFactory.static.deserialize(signedBytes);
@@ -187,7 +208,15 @@ export async function updateMultisigSettings({
   // 新規追加する連署者の人数分だけ、追加の連署が必要
   const cosignerCount = additions.length;
 
-  return await proposeBondedAggregate([embeddedTx], cosignerCount);
+  return await proposeBondedAggregate([embeddedTx], cosignerCount, {
+    typeLabel: "マルチシグ設定変更",
+    details: [
+      { label: "最小承認者数の増減", value: minApprovalDelta },
+      { label: "最小削除承認者数の増減", value: minRemovalDelta },
+      { label: "追加する連署者", value: additionAddresses.length ? additionAddresses.join(", ") : "(なし)" },
+      { label: "削除する連署者", value: deletionAddresses.length ? deletionAddresses.join(", ") : "(なし)" },
+    ],
+  });
 }
 
 /* ============================================================
@@ -232,7 +261,15 @@ export async function sendFromMultisig({ multisigAddress, recipientAddress, amou
   // 自分自身の署名(起案者)がマルチシグの連署者の1人としてそのままカウントされるため、
   // ここでは追加の連署者数は指定しない(0)。承認数が足りない場合は他の連署者が
   // 「マルチシグ署名」から追加で連署する。
-  return await proposeBondedAggregate([embeddedTx], 0);
+  return await proposeBondedAggregate([embeddedTx], 0, {
+    typeLabel: "マルチシグ送金(提案)",
+    sender: multisigAddress,
+    recipient: recipientAddress,
+    details: [
+      { label: "数量", value: `${amountXym} XYM` },
+      { label: "メッセージ", value: message || "(なし)" },
+    ],
+  });
 }
 
 /* ============================================================
@@ -285,6 +322,14 @@ export async function loadPendingPartialTransactions() {
 }
 
 export async function cosignPending(transactionHashHex) {
+  const confirmed = await requestTxConfirmation({
+    typeLabel: "マルチシグ連署(承認)",
+    details: [{ label: "対象トランザクションHash", value: transactionHashHex }],
+  });
+  if (!confirmed) {
+    throw new TxCancelledError();
+  }
+
   const cosignature = cosignTransactionHash(transactionHashHex);
 
   const res = await fetch(new URL("/transactions/cosignature", appState.NODE), {

@@ -107,7 +107,20 @@ export async function setMetadata(targetType, targetIdHex, keyString, valueStrin
     60 * 60
   );
 
-  return await signAndAnnounceTx(tx);
+  const typeLabelMap = {
+    address: "メタデータ登録(アカウント)",
+    namespace: "メタデータ登録(ネームスペース)",
+    mosaic: "メタデータ登録(モザイク)",
+  };
+
+  return await signAndAnnounceTx(tx, {
+    typeLabel: typeLabelMap[targetType] ?? "メタデータ登録",
+    details: [
+      ...(targetIdHex ? [{ label: "対象ID", value: targetIdHex.toUpperCase() }] : []),
+      { label: "キー", value: keyString },
+      { label: "値", value: valueString },
+    ],
+  });
 }
 
 /* ============================================================

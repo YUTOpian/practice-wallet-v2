@@ -9,6 +9,7 @@ import { refreshAccount } from "./account.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket, closeWebSocket } from "./ws.js";
 import { setText } from "./ui.js";
+import { requestTxConfirmation, formatTxDeadline, TxCancelledError } from "./txConfirm.js";
 
 const VAULT_KEY = "walletVault";
 
@@ -575,7 +576,28 @@ export function estimateFeeFromTx(tx) {
   return (feeMicroXym / 1_000_000).toLocaleString("ja-JP", { maximumFractionDigits: 6 });
 }
 
-export async function signAndAnnounceTx(tx) {
+/* ============================================================
+   confirmInfo が渡された場合、署名の前に確認ダイアログを表示する。
+   confirmInfo:
+     { typeLabel, sender?, recipient?, details? }
+   ユーザーがキャンセルした場合は TxCancelledError を投げる。
+   (confirmInfo を渡さない呼び出しは従来通り確認なしで実行される)
+============================================================ */
+export async function signAndAnnounceTx(tx, confirmInfo) {
+  if (confirmInfo) {
+    const confirmed = await requestTxConfirmation({
+      typeLabel: confirmInfo.typeLabel,
+      sender: confirmInfo.sender ?? appState.currentAddress?.toString(),
+      recipient: confirmInfo.recipient,
+      fee: estimateFeeFromTx(tx),
+      deadlineText: formatTxDeadline(tx),
+      details: confirmInfo.details,
+    });
+    if (!confirmed) {
+      throw new TxCancelledError();
+    }
+  }
+
   const { jsonPayload: announceBody, signedBytes } = await signTxOnly(tx);
 
   const res = await fetch(new URL("/transactions", appState.NODE), {

@@ -71,7 +71,7 @@ function buildFlags(restrictionType, block, outgoing) {
   return new F(value);
 }
 
-async function submitRestriction(descriptor) {
+async function submitRestriction(descriptor, confirmInfo) {
   const embedded = appState.facade.createEmbeddedTransactionFromTypedDescriptor(descriptor, appState.currentPubKey);
 
   const aggregateDescriptor = new appState.sdkSymbol.descriptors.AggregateCompleteTransactionV2Descriptor(
@@ -86,7 +86,7 @@ async function submitRestriction(descriptor) {
     60 * 60
   );
 
-  return await signAndAnnounceTx(tx);
+  return await signAndAnnounceTx(tx, confirmInfo);
 }
 
 /* ============================================================
@@ -102,7 +102,15 @@ export async function setAddressRestriction({ block, outgoing, additions, deleti
     deletions.map((a) => new appState.sdkSymbol.Address(a))
   );
 
-  return await submitRestriction(descriptor);
+  return await submitRestriction(descriptor, {
+    typeLabel: "アカウント制限(アドレス)",
+    details: [
+      { label: "モード", value: block ? "ブロックリスト" : "許可リスト" },
+      { label: "方向", value: outgoing ? "送信(自分発)" : "受信(自分宛)" },
+      { label: "追加", value: additions.length ? additions.join(", ") : "(なし)" },
+      { label: "削除", value: deletions.length ? deletions.join(", ") : "(なし)" },
+    ],
+  });
 }
 
 /* ============================================================
@@ -120,7 +128,15 @@ export async function setMosaicRestriction({ block, outgoing, additions, deletio
     deletions.map(toId)
   );
 
-  return await submitRestriction(descriptor);
+  return await submitRestriction(descriptor, {
+    typeLabel: "アカウント制限(モザイク)",
+    details: [
+      { label: "モード", value: block ? "ブロックリスト" : "許可リスト" },
+      { label: "方向", value: outgoing ? "送信(自分発)" : "受信(自分宛)" },
+      { label: "追加", value: additions.length ? additions.join(", ") : "(なし)" },
+      { label: "削除", value: deletions.length ? deletions.join(", ") : "(なし)" },
+    ],
+  });
 }
 
 /* ============================================================
@@ -138,7 +154,15 @@ export async function setOperationRestriction({ block, outgoing, additions, dele
     deletions.map(toType)
   );
 
-  return await submitRestriction(descriptor);
+  return await submitRestriction(descriptor, {
+    typeLabel: "アカウント制限(操作)",
+    details: [
+      { label: "モード", value: block ? "ブロックリスト" : "許可リスト" },
+      { label: "方向", value: outgoing ? "送信(自分発)" : "受信(自分宛)" },
+      { label: "追加", value: additions.length ? additions.join(", ") : "(なし)" },
+      { label: "削除", value: deletions.length ? deletions.join(", ") : "(なし)" },
+    ],
+  });
 }
 
 /* ============================================================
@@ -203,7 +227,16 @@ export async function setMosaicGlobalRestriction({
     models.MosaicRestrictionType[newType]
   );
 
-  return await submitRestriction(descriptor);
+  return await submitRestriction(descriptor, {
+    typeLabel: "モザイクグローバル制限",
+    details: [
+      { label: "モザイクID", value: mosaicIdHex.trim().toUpperCase() },
+      { label: "参照モザイクID", value: referenceMosaicIdHex ? referenceMosaicIdHex.trim().toUpperCase() : "(なし)" },
+      { label: "制限キー", value: keyString },
+      { label: "変更前の値/種別", value: `${previousValue} / ${previousType}` },
+      { label: "変更後の値/種別", value: `${newValue} / ${newType}` },
+    ],
+  });
 }
 
 /* ============================================================
@@ -230,5 +263,14 @@ export async function setMosaicAddressRestriction({
     new appState.sdkSymbol.Address(targetAddress)
   );
 
-  return await submitRestriction(descriptor);
+  return await submitRestriction(descriptor, {
+    typeLabel: "モザイクアドレス制限",
+    recipient: targetAddress,
+    details: [
+      { label: "モザイクID", value: mosaicIdHex.trim().toUpperCase() },
+      { label: "制限キー", value: keyString },
+      { label: "変更前の値", value: previousValue },
+      { label: "変更後の値", value: newValue },
+    ],
+  });
 }

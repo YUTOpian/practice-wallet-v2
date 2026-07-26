@@ -178,7 +178,14 @@ export async function populateMosaicNamespaceSelect() {
    作成済みモザイクを後からネームスペースにリンク/解除する
 ============================================================ */
 export async function setMosaicAlias(mosaicIdHex, namespaceIdHex, action = "link") {
-  return await signAndAnnounceTx(buildMosaicAliasTx(mosaicIdHex, namespaceIdHex, action));
+  const tx = buildMosaicAliasTx(mosaicIdHex, namespaceIdHex, action);
+  return await signAndAnnounceTx(tx, {
+    typeLabel: action === "unlink" ? "モザイクエイリアス解除" : "モザイクエイリアス設定",
+    details: [
+      { label: "モザイクID", value: mosaicIdHex.toUpperCase() },
+      { label: "ネームスペースID", value: namespaceIdHex.toUpperCase() },
+    ],
+  });
 }
 
 function buildMosaicAliasTx(mosaicIdHex, namespaceIdHex, action = "link") {
@@ -307,7 +314,33 @@ export function estimateMosaicCreationFee(options) {
 ============================================================ */
 export async function createMosaic(options) {
   const tx = buildMosaicCreationTx(options);
-  return await signAndAnnounceTx(tx);
+  const {
+    divisibility,
+    isUnlimited,
+    durationBlocks,
+    supplyMutable,
+    transferable,
+    restrictable,
+    revokable,
+    initialSupply,
+    linkNamespaceIdHex,
+  } = options;
+
+  return await signAndAnnounceTx(tx, {
+    typeLabel: "モザイク作成",
+    details: [
+      { label: "可分性", value: divisibility },
+      { label: "初期供給量", value: initialSupply || 0 },
+      { label: "有効期限", value: isUnlimited ? "無期限" : `${durationBlocks} ブロック` },
+      { label: "供給量変更可能", value: supplyMutable ? "はい" : "いいえ" },
+      { label: "第三者へ譲渡可能", value: transferable ? "はい" : "いいえ" },
+      { label: "制限設定可能", value: restrictable ? "はい" : "いいえ" },
+      { label: "取り消し可能", value: revokable ? "はい" : "いいえ" },
+      ...(linkNamespaceIdHex
+        ? [{ label: "リンク先ネームスペースID", value: linkNamespaceIdHex.toUpperCase() }]
+        : []),
+    ],
+  });
 }
 
 /* ============================================================
@@ -330,5 +363,12 @@ export async function changeMosaicSupply({ mosaicIdHex, direction, amount, divis
     60 * 60
   );
 
-  return await signAndAnnounceTx(tx);
+  return await signAndAnnounceTx(tx, {
+    typeLabel: "モザイク供給量変更",
+    details: [
+      { label: "モザイクID", value: mosaicIdHex.toUpperCase() },
+      { label: "増減", value: direction === "decrease" ? "減少" : "増加" },
+      { label: "数量", value: amount },
+    ],
+  });
 }

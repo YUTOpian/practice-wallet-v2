@@ -6,7 +6,7 @@ import { appState } from "./config.js";
 import { setStatus } from "./ui.js";
 import { getRecipientPublicKey } from "./account.js";
 import { hexToBytes } from "./utils.js";
-import { signPayloadLocally, encryptMessageLocally } from "./auth.js";
+import { signAndAnnounceTx, encryptMessageLocally } from "./auth.js";
 
 export async function sendTx() {
   /*
@@ -139,56 +139,34 @@ export async function sendTx() {
     60 * 60
   );
 
+  /*
+    確認画面用の情報
+    (手数料・期限・送信元は signAndAnnounceTx 側で tx から自動算出される)
+  */
+  const mosaicInfo = appState.mosaicInfo?.[selectedMosaicId];
+  const mosaicName = mosaicInfo?.mosaicName ?? selectedMosaicId;
+
+  const confirmInfo = {
+    typeLabel: "送金",
+    recipient: recipientRaw,
+    details: [
+      { label: "モザイク", value: `${mosaicName} (${selectedMosaicId})` },
+      { label: "数量", value: amountStr },
+      { label: "メッセージ", value: messageText.trim() !== "" ? messageText : "(なし)" },
+      ...(shouldEncrypt ? [{ label: "メッセージ暗号化", value: "する" }] : []),
+    ],
+  };
+
   try {
-    let announceBody;
-
-    if (appState.authMode === "local") {
-      /*
-        ローカル署名(ニーモニックログイン時)
-        signPayloadLocallyはアナウンス用のJSON文字列をそのまま返す
-      */
-      setStatus("tx-status", "署名しています...");
-      announceBody = signPayloadLocally(tx);
-    } else {
-      /*
-        SSS署名
-      */
-      const payload = appState.sdkCore.utils.uint8ToHex(tx.serialize());
-      setStatus("tx-status", "SSSで署名待ち...");
-
-      window.SSS.setTransactionByPayload(payload);
-      const signed = await window.SSS.requestSign();
-
-      if (!signed?.payload) {
-        throw new Error("SSS signature failed");
-      }
-
-      announceBody = JSON.stringify({ payload: signed.payload });
+    setStatus("tx-status", "確認画面を表示しています...");
+    const hash = await signAndAnnounceTx(tx, confirmInfo);
+    setStatus("tx-status", `送金しました。\nHash: ${hash}`, "success");
+  } catch (e) {
+    if (e?.cancelled) {
+      setStatus("tx-status", "送金をキャンセルしました。");
+      return;
     }
-
-    /*
-      Announce
-      /transactions PUT
-    */
-    const response = await fetch(new URL("/transactions", appState.NODE), {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: announceBody
-    });
-
-    const result = await response.json();
-    console.log("announce result:", result);
-
-    if (response.ok) {
-      const hash = appState.facade.hashTransaction(tx).toString();
-      setStatus("tx-status", `送金しました。\nHash: ${hash}`, "success");
-    } else {
-      setStatus("tx-status", result.message ?? "アナウンス失敗", "error");
-    }
-  } catch(e) {
     console.error("transfer error:", e);
-    setStatus("tx-status", "署名または送信に失敗しました。", "error");
+    setStatus("tx-status", e.message ?? "署名または送信に失敗しました。", "error");
   }
 }

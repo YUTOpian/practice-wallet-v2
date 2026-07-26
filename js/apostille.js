@@ -89,7 +89,20 @@ export async function createApostille({ file, fileHashHex, ownerAddress, metadat
     60 * 60
   );
 
-  return await signAndAnnounceTx(tx);
+  return await signAndAnnounceTx(tx, {
+    typeLabel: "アポスティーユ証明(ファイル公証)",
+    recipient: recipientAddress.toString(),
+    details: [
+      { label: "ファイル名", value: cert.fileName || "(なし)" },
+      { label: "ファイルハッシュ (SHA-256)", value: fileHashHex },
+      ...(metadataKey && metadataKey.trim()
+        ? [
+            { label: "メタデータキー", value: metadataKey.trim() },
+            { label: "メタデータ値", value: metadataValue || fileHashHex },
+          ]
+        : []),
+    ],
+  });
 }
 
 /* ============================================================

@@ -196,7 +196,14 @@ export function estimateRootNamespaceFee(name, durationBlocks) {
 }
 
 export async function registerRootNamespace(name, durationBlocks) {
-  return await signAndAnnounceTx(buildRootNamespaceTx(name, durationBlocks));
+  const tx = buildRootNamespaceTx(name, durationBlocks);
+  return await signAndAnnounceTx(tx, {
+    typeLabel: "ネームスペース登録(ルート)",
+    details: [
+      { label: "ネームスペース名", value: name },
+      { label: "登録期間", value: `${durationBlocks} ブロック` },
+    ],
+  });
 }
 
 /* ============================================================
@@ -231,7 +238,14 @@ export function estimateSubNamespaceFee(parentIdHex, subName) {
 }
 
 export async function registerSubNamespace(parentIdHex, subName) {
-  return await signAndAnnounceTx(buildSubNamespaceTx(parentIdHex, subName));
+  const tx = buildSubNamespaceTx(parentIdHex, subName);
+  return await signAndAnnounceTx(tx, {
+    typeLabel: "ネームスペース登録(サブ)",
+    details: [
+      { label: "親ネームスペースID", value: parentIdHex.toUpperCase() },
+      { label: "サブネームスペース名", value: subName },
+    ],
+  });
 }
 
 /* ============================================================
@@ -262,5 +276,10 @@ export function estimateAddressAliasFee(namespaceIdHex, targetAddress, action) {
 }
 
 export async function setAddressAlias(namespaceIdHex, targetAddress, action) {
-  return await signAndAnnounceTx(buildAddressAliasTx(namespaceIdHex, targetAddress, action));
+  const tx = buildAddressAliasTx(namespaceIdHex, targetAddress, action);
+  return await signAndAnnounceTx(tx, {
+    typeLabel: action === "unlink" ? "アドレスエイリアス解除" : "アドレスエイリアス設定",
+    recipient: targetAddress,
+    details: [{ label: "ネームスペースID", value: namespaceIdHex.toUpperCase() }],
+  });
 }
