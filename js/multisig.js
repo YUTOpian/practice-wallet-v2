@@ -72,6 +72,39 @@ function describeEmbeddedTransactions(embedded) {
   return (embedded || []).map((item) => describeEmbeddedTransaction(item.transaction ?? item));
 }
 
+/* ============================================================
+   連署の実効性チェック:
+   埋め込みトランザクションの signerPublicKey(＝送金元として必要な
+   署名者)と、いま実際に連署しようとしている自分のアカウントの公開鍵が
+   一致しているかを確認する。
+
+   ⚠️ 「連署パケット自体はノードに正しく記録されるが、実際には送金元の
+   要件を満たしていない」というケースは、エラーが一切出ないまま
+   Txが永遠に partial(未確定)のまま残る、という分かりにくい不具合を
+   引き起こす。これを未然に警告できるようにする。
+
+   ただし、送金元がマルチシグアカウントの場合はsignerPublicKeyが
+   マルチシグアカウント自身の鍵になり、実際に連署すべきなのは
+   その"連署者"(cosignatory)なので、単純な不一致だけでは
+   「間違ったアカウント」と断定できない。そのため警告文でも
+   マルチシグの可能性には触れる形にする。
+============================================================ */
+function checkSignerMismatch(embedded) {
+  const requiredSigners = [
+    ...new Set(
+      (embedded || [])
+        .map((item) => (item.transaction ?? item).signerPublicKey)
+        .filter(Boolean)
+        .map((pk) => pk.toUpperCase())
+    ),
+  ];
+
+  const myPubKeyUpper = (appState.currentPubKey || "").toUpperCase();
+  const matches = requiredSigners.length === 0 || requiredSigners.includes(myPubKeyUpper);
+
+  return { requiredSigners, matches };
+}
+
 const HASH_LOCK_AMOUNT = 10_000_000n; // 10 XYM (microXYM)
 
 /* ============================================================
@@ -454,11 +487,21 @@ function renderPendingItemHtml(hash, transaction, nodeUrl) {
     .map((desc) => `<div>内容: ${escapeHtml(desc)}</div>`)
     .join("");
 
+  // ⚠️ 連署パケット自体はノードに正しく記録されるが、実際には自分の
+  // アカウントが必要な署名者ではないため、いつまでも確定しない
+  // ケースがあるため、一覧の時点でも気づけるよう警告を出す。
+  const signerCheck = checkSignerMismatch(transaction.transactions);
+  const signerWarningHtml =
+    !alreadySigned && !signerCheck.matches
+      ? `<div style="color:#f97316;">⚠️ 現在ログイン中のアカウントは、この提案の署名者と一致していない可能性があります(送金元がマルチシグアカウントの場合は問題ありません)</div>`
+      : "";
+
   return `
     <div class="harvest-history-item">
       <div>Hash: ${escapeHtml(hash)}</div>
       ${contentHtml}
       <div>現在の連署数: ${cosigCount}</div>
+      ${signerWarningHtml}
       <div>${alreadySigned ? "✅ 署名済み" : ""}</div>
       ${
         alreadySigned
@@ -610,6 +653,10 @@ export async function cosignPending(transactionHashHex, nodeUrlOverride = null) 
   })();
   const isExpired = deadlineMs != null && Date.now() > deadlineMs;
 
+  const signerCheck = found?.transaction
+    ? checkSignerMismatch(found.transaction.transactions)
+    : { requiredSigners: [], matches: true };
+
   const confirmed = await requestTxConfirmation({
     typeLabel: "マルチシグ連署(承認)",
     details: [
@@ -618,6 +665,19 @@ export async function cosignPending(transactionHashHex, nodeUrlOverride = null) 
       ...(deadlineText ? [{ label: "有効期限", value: deadlineText }] : []),
       ...(isExpired
         ? [{ label: "⚠️ 期限切れの可能性", value: "有効期限を過ぎています。連署しても反映されない可能性が高いです。" }]
+        : []),
+      ...(!signerCheck.matches
+        ? [
+            {
+              label: "⚠️ 署名者が一致しない可能性",
+              value:
+                `この提案の送金元として必要な公開鍵(${signerCheck.requiredSigners.join(", ")})と、` +
+                `現在ログイン中のアカウントの公開鍵(${appState.currentPubKey ?? "---"})が一致しません。` +
+                "送金元がマルチシグアカウント自身であれば連署者の1人として問題ない場合がありますが、" +
+                "そうでない場合、連署はノードに記録されても要件を満たさず、" +
+                "いつまでも承認されずに残り続けます(エラーは出ません)。ログイン中のアカウントが正しいか確認してください。",
+            },
+          ]
         : []),
       ...(embeddedDescriptions && embeddedDescriptions.length
         ? embeddedDescriptions.map((desc, i) => ({ label: `内容 ${i + 1}`, value: desc }))
