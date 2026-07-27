@@ -12,8 +12,65 @@
 
 import { appState, getXymMosaicIdHex } from "./config.js";
 import { signTxOnly, signAndAnnounceTx, cosignTransactionHash, estimateFeeFromTx } from "./auth.js";
-import { hexToBytes } from "./utils.js";
+import { hexToBytes, escapeHtml } from "./utils.js";
 import { requestTxConfirmation, formatTxDeadline, TxCancelledError } from "./txConfirm.js";
+import { decodeMessage, formatAddress } from "./transactions.js";
+
+// REST APIが返す埋め込みトランザクションのtype値(数値)
+const EMBEDDED_TX_TYPE = {
+  TRANSFER: 16724,
+  MULTISIG_ACCOUNT_MODIFICATION: 16725,
+};
+
+/* ============================================================
+   埋め込みトランザクション1件を、連署前に人間が確認できる文言に変換する。
+
+   ⚠️ 「マルチシグ連署」は、他人(オーナー/提案者)が作った内容に
+   自分の署名を追加する行為なので、署名する前に「実際に何を承認する
+   ことになるのか」(送金先・数量・メッセージ)を必ず表示する必要がある。
+   以前はハッシュ値だけを見せて署名させていた(内容が一切確認できない
+   「ブラインド署名」になっていた)。
+============================================================ */
+function describeEmbeddedTransaction(tx) {
+  const type = Number(tx.type);
+
+  if (type === EMBEDDED_TX_TYPE.TRANSFER) {
+    const recipient = formatAddress(tx.recipientAddress);
+    const xymId = getXymMosaicIdHex();
+
+    const mosaicsText = (tx.mosaics || [])
+      .map((m) => {
+        const idHex = String(m.id ?? "").toUpperCase();
+        if (idHex === xymId) {
+          const xym = (Number(m.amount) / 1_000_000).toLocaleString("ja-JP", { maximumFractionDigits: 6 });
+          return `${xym} XYM`;
+        }
+        return `${m.amount}（モザイクID: ${idHex}、可分性不明のため未換算の生数量）`;
+      })
+      .join(", ") || "(モザイクなし)";
+
+    const message = decodeMessage(tx.message);
+    return `送金 → 宛先: ${recipient} / 数量: ${mosaicsText} / メッセージ: ${message}`;
+  }
+
+  if (type === EMBEDDED_TX_TYPE.MULTISIG_ACCOUNT_MODIFICATION) {
+    const additions = tx.addressAdditions ?? [];
+    const deletions = tx.addressDeletions ?? [];
+    return (
+      `マルチシグ設定変更 → 最小承認者数の増減: ${tx.minApprovalDelta ?? 0} / ` +
+      `最小削除承認者数の増減: ${tx.minRemovalDelta ?? 0} / ` +
+      `追加: ${additions.length ? additions.map(formatAddress).join(", ") : "(なし)"} / ` +
+      `削除: ${deletions.length ? deletions.map(formatAddress).join(", ") : "(なし)"}`
+    );
+  }
+
+  // 未対応の種類は種別コードだけでも必ず表示する(内容を隠さない)
+  return `その他のトランザクション（type: ${tx.type}）。この画面では内容を要約表示できません。署名前に内容を把握できているか十分ご注意ください。`;
+}
+
+function describeEmbeddedTransactions(embedded) {
+  return (embedded || []).map((item) => describeEmbeddedTransaction(item.transaction ?? item));
+}
 
 const HASH_LOCK_AMOUNT = 10_000_000n; // 10 XYM (microXYM)
 
@@ -391,15 +448,22 @@ function renderPendingItemHtml(hash, transaction, nodeUrl) {
     (c) => c.signerPublicKey?.toUpperCase() === appState.currentPubKey?.toUpperCase()
   );
 
+  // ⚠️ 「署名する」ボタンを押すまで中身(送金先・数量・メッセージ等)が
+  // 全く分からないブラインド署名になってしまうため、一覧の時点でも要約を表示する。
+  const contentHtml = describeEmbeddedTransactions(transaction.transactions)
+    .map((desc) => `<div>内容: ${escapeHtml(desc)}</div>`)
+    .join("");
+
   return `
     <div class="harvest-history-item">
-      <div>Hash: ${hash}</div>
+      <div>Hash: ${escapeHtml(hash)}</div>
+      ${contentHtml}
       <div>現在の連署数: ${cosigCount}</div>
       <div>${alreadySigned ? "✅ 署名済み" : ""}</div>
       ${
         alreadySigned
           ? ""
-          : `<button class="account-hide-btn" data-action="cosign" data-hash="${hash}" data-node="${nodeUrl ?? ""}">署名する</button>`
+          : `<button class="account-hide-btn" data-action="cosign" data-hash="${escapeHtml(hash)}" data-node="${escapeHtml(nodeUrl ?? "")}">署名する</button>`
       }
     </div>
   `;
@@ -478,14 +542,91 @@ export async function loadPendingPartialTransactions(elId = "multisig-pending-li
    (相手から伝えられた「アナウンス先ノード」に確実に届けるため)。
    省略時は従来通り自分の接続中ノード(appState.NODE)を使う。
 ============================================================ */
+/* ============================================================
+   連署(コサイン)パケットを1ノードへPUTする。
+   レスポンスが200でも「そのノードが受理して転送した」という
+   意味でしかなく、実際に反映された保証ではない。
+============================================================ */
+async function announceCosignature(nodeUrl, cosignature) {
+  const res = await fetch(new URL("/transactions/cosignature", nodeUrl), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cosignature),
+  });
+  const result = await res.json();
+  if (!res.ok) {
+    throw new Error(result.message ?? "連署のアナウンスに失敗しました");
+  }
+  return result;
+}
+
+/* ============================================================
+   短時間だけトランザクションの状態をポーリングして確認する。
+   (連署の送信が成功しても、実際に確定したかどうかは別問題であり、
+   これを確認せずに「完了しました」と表示していたのが実害のある不具合
+   だったため、必ずここで確認してから呼び出し側へ結果を返す)
+============================================================ */
+async function pollTransactionStatus(nodeUrl, hash, { attempts = 6, intervalMs = 2000 } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.group === "confirmed" || json.group === "failed") {
+          return json;
+        }
+      }
+    } catch {
+      // ネットワークエラーは無視して次のポーリングへ
+    }
+    if (i < attempts - 1) {
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  }
+  return null; // まだ確定していない(要:後で改めて確認)
+}
+
 export async function cosignPending(transactionHashHex, nodeUrlOverride = null) {
   const nodeUrl = nodeUrlOverride || appState.NODE;
+
+  // ⚠️ 以前はハッシュ値だけを見せて連署するかどうかを聞いていた
+  // (＝実際に何を承認することになるのか、ここでは一切確認できなかった)。
+  // 連署は他人が作った内容を承認する行為なので、署名前に必ず
+  // 対象の保留中トランザクションを取得し、内容を確認できるようにする。
+  const found = await fetchPartialTransactionByHash(nodeUrl, transactionHashHex);
+  const embeddedDescriptions = found?.transaction
+    ? describeEmbeddedTransactions(found.transaction.transactions)
+    : null;
+
+  const deadlineText = found?.transaction ? formatTxDeadline(found.transaction) : null;
+  const deadlineMs = (() => {
+    try {
+      const raw = found?.transaction?.deadline;
+      if (raw == null || !appState.epochAdjustment) return null;
+      return Number(appState.epochAdjustment) * 1000 + Number(raw);
+    } catch {
+      return null;
+    }
+  })();
+  const isExpired = deadlineMs != null && Date.now() > deadlineMs;
 
   const confirmed = await requestTxConfirmation({
     typeLabel: "マルチシグ連署(承認)",
     details: [
       { label: "対象トランザクションHash", value: transactionHashHex },
       ...(nodeUrlOverride ? [{ label: "アナウンス先ノード", value: nodeUrl }] : []),
+      ...(deadlineText ? [{ label: "有効期限", value: deadlineText }] : []),
+      ...(isExpired
+        ? [{ label: "⚠️ 期限切れの可能性", value: "有効期限を過ぎています。連署しても反映されない可能性が高いです。" }]
+        : []),
+      ...(embeddedDescriptions && embeddedDescriptions.length
+        ? embeddedDescriptions.map((desc, i) => ({ label: `内容 ${i + 1}`, value: desc }))
+        : [
+            {
+              label: "⚠️ 内容確認",
+              value: "対象トランザクションの内容を取得できませんでした。中身を確認せずに署名することになりますが、よろしいですか？",
+            },
+          ]),
     ],
   });
   if (!confirmed) {
@@ -494,15 +635,32 @@ export async function cosignPending(transactionHashHex, nodeUrlOverride = null) 
 
   const cosignature = cosignTransactionHash(transactionHashHex);
 
-  const res = await fetch(new URL("/transactions/cosignature", nodeUrl), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(cosignature),
-  });
-
-  const result = await res.json();
-  if (!res.ok) {
-    throw new Error(result.message ?? "連署のアナウンスに失敗しました");
+  // ⚠️ 「アグリゲートTxが実際にアナウンスされているノード」と、いま連署を
+  // 送ろうとしているノードが食い違っていると、そのノードは連署パケットを
+  // 「受け取って転送した」と200を返しつつも、紐付ける親のアグリゲートを
+  // ローカルに持っていないため実質的に反映されないことがある。
+  // これを避けるため、対象ノード(nodeUrl)に加えて、自分が現在接続中の
+  // ノード(appState.NODE)が別であればそちらにも送っておく。
+  const targetNodes = [...new Set([nodeUrl, appState.NODE].filter(Boolean))];
+  const announceResults = [];
+  for (const target of targetNodes) {
+    try {
+      announceResults.push(await announceCosignature(target, cosignature));
+    } catch (e) {
+      console.warn(`[multisig] 連署のアナウンスに失敗しました(${target}):`, e);
+    }
   }
-  return result;
+  if (announceResults.length === 0) {
+    throw new Error("連署のアナウンスにすべてのノードで失敗しました。");
+  }
+
+  // 送信して終わりにせず、実際にどうなったかを短時間だけ確認する
+  const statusResult = await pollTransactionStatus(nodeUrl, transactionHashHex);
+
+  return {
+    ...announceResults[0],
+    announcedTo: targetNodes,
+    finalStatus: statusResult?.group ?? "unknown", // "confirmed" | "failed" | "unknown"
+    finalStatusDetail: statusResult ?? null,
+  };
 }

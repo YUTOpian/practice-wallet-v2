@@ -98,6 +98,8 @@ import {
   createSponsorshipRequest,
   downloadSponsorshipRequestJson,
   parseSponsorshipRequestJson,
+  verifySponsorshipRequest,
+  hasApprovedBefore,
   approveSponsorshipRequest,
   buildCosignInfo,
   downloadCosignInfoJson,
@@ -698,6 +700,22 @@ window.addEventListener("load", async () => {
     }
   });
 
+  // ⚠️ 連署の送信(PUTが200を返すこと)と、実際にトランザクションが
+  // 確定して送金が実行されることは別物。以前はここを区別せず
+  // 「完了しました」と表示していたため、実際には反映されていない場合にも
+  // ユーザーが気づけなかった。cosignPending()が返すfinalStatusを見て、
+  // 状況に応じた正確な文言を組み立てる。
+  function describeCosignResult(result) {
+    if (result?.finalStatus === "confirmed") {
+      return "✅ 送金が完了しました(連署によりトランザクションが確定しました)。";
+    }
+    if (result?.finalStatus === "failed") {
+      const reason = result?.finalStatusDetail?.code ? `(理由: ${result.finalStatusDetail.code})` : "";
+      return `❌ 連署は送信されましたが、トランザクションは失敗しました${reason}。有効期限切れの可能性があります。`;
+    }
+    return "連署を送信しました。ただし、まだネットワークで確定したかは確認できていません。しばらくしてから一覧を再読み込みして確認してください。";
+  }
+
   document.getElementById("multisig-pending-list")?.addEventListener("click", async e => {
     const btn = e.target.closest('[data-action="cosign"]');
     if (!btn) return;
@@ -706,8 +724,8 @@ window.addEventListener("load", async () => {
     btn.disabled = true;
     btn.textContent = "署名中...";
     try {
-      await cosignPending(hash);
-      alert("✅ 連署を送信しました。");
+      const result = await cosignPending(hash);
+      alert(describeCosignResult(result));
       await loadPendingPartialTransactions();
     } catch (e) {
       console.error("cosignPending error:", e);
@@ -1465,8 +1483,8 @@ window.addEventListener("load", async () => {
     btn.disabled = true;
     btn.textContent = "署名中...";
     try {
-      await cosignPending(hash, nodeOverride);
-      alert("✅ 送金が完了しました(コサインを送信しました)。");
+      const result = await cosignPending(hash, nodeOverride);
+      alert(describeCosignResult(result));
       await loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded));
     } catch (e) {
       console.error("cosignPending error:", e);
@@ -1490,11 +1508,14 @@ window.addEventListener("load", async () => {
   document.getElementById("back-fee-delegation-menu-owner")?.addEventListener("click", () => showPage(feeDelegationMenuPage));
 
   let feeDelegRequestLoaded = null;
+  let feeDelegVerification = null;
   let feeDelegCosignInfoGenerated = null;
 
   document.getElementById("fee-deleg-owner-request-file")?.addEventListener("change", async e => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    feeDelegVerification = null;
 
     try {
       const text = await file.text();
@@ -1507,7 +1528,36 @@ window.addEventListener("load", async () => {
       document.getElementById("fee-deleg-owner-preview-amount").textContent = feeDelegRequestLoaded.amountDisplay;
       document.getElementById("fee-deleg-owner-preview-message").textContent = feeDelegRequestLoaded.message || "(なし)";
       document.getElementById("fee-deleg-owner-request-preview").style.display = "block";
-      setStatus("fee-deleg-owner-request-status", "", "default");
+      setStatus("fee-deleg-owner-request-status", "依頼内容を検証しています...", "default");
+
+      // ⚠️ 依頼者の自己申告(amountDisplay/divisibility)を鵜呑みにせず、
+      // オーナー側で残高・公開鍵とアドレスの整合性・実際のdivisibilityを
+      // 独立に確認する。承認前の最終判断材料として表示する。
+      const requestForVerification = feeDelegRequestLoaded;
+      const verification = await verifySponsorshipRequest(requestForVerification);
+      if (feeDelegRequestLoaded !== requestForVerification) return; // 検証中に別ファイルが読み込まれた場合は破棄
+      feeDelegVerification = verification;
+
+      if (verification.recalculatedAmountDisplay != null) {
+        document.getElementById("fee-deleg-owner-preview-amount").textContent =
+          `${verification.recalculatedAmountDisplay}（依頼者側の自己申告: ${feeDelegRequestLoaded.amountDisplay}）`;
+      }
+
+      if (hasApprovedBefore(feeDelegRequestLoaded)) {
+        verification.warnings = [
+          "この依頼は過去に承認済みの可能性があります(同一内容の依頼です)。",
+          ...verification.warnings,
+        ];
+      }
+
+      setStatus(
+        "fee-deleg-owner-request-status",
+        verification.warnings.length
+          ? `⚠️ ${verification.warnings.length}件の警告: ` +
+            verification.warnings.map((w, i) => `(${i + 1}) ${w}`).join("　")
+          : "✅ 独立検証で問題は見つかりませんでした。",
+        verification.warnings.length ? "error" : "success"
+      );
     } catch (e) {
       console.error("parseSponsorshipRequestJson error:", e);
       feeDelegRequestLoaded = null;
@@ -1522,7 +1572,7 @@ window.addEventListener("load", async () => {
     setStatus("fee-deleg-owner-request-status", "確認画面を表示しています...");
     try {
       const requestSnapshot = feeDelegRequestLoaded;
-      const hash = await approveSponsorshipRequest(feeDelegRequestLoaded);
+      const hash = await approveSponsorshipRequest(feeDelegRequestLoaded, feeDelegVerification);
 
       // アグリゲートボンデッドTxは、このノードのローカルキャッシュにのみ載る。
       // 依頼者が別ノードに接続していると「支払い状況」タブに表示されないことが
@@ -1586,8 +1636,8 @@ window.addEventListener("load", async () => {
     btn.disabled = true;
     btn.textContent = "署名中...";
     try {
-      await cosignPending(hash, nodeOverride);
-      alert("✅ 連署を送信しました。");
+      const result = await cosignPending(hash, nodeOverride);
+      alert(describeCosignResult(result));
       await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
     } catch (e) {
       console.error("cosignPending error:", e);
