@@ -24,7 +24,7 @@ function formatTimestamp(symbolTimestamp) {
    v3 Message Decode
    0x00 PlainMessage, 0x01 EncryptedMessage, 0xFF RawMessage, 0xFE Harvesting Delegation
 ============================================================ */
-function decodeMessage(payload) {
+export function decodeMessage(payload) {
   if (!payload) return "(no message)";
 
   try {
@@ -59,7 +59,7 @@ function decodeMessage(payload) {
      v3 SDKに fromDecodedAddressHexString のような静的メソッドは無いため、
      16進文字列→バイト列に変換してコンストラクタに渡す。
 ============================================================ */
-function formatAddress(address) {
+export function formatAddress(address) {
   if (!address) return "---";
 
   if (typeof address !== "string") {
