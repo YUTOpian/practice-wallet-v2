@@ -5,7 +5,7 @@ import { sendTx } from "./transfer.js";
 import { loadRecentTx, initLiveTx } from "./transactions.js";
 import { initWebSocket } from "./ws.js";
 import { selectNode } from "./nodeSelector.js";
-import { showPopup, escapeHtml } from "./utils.js";
+import { showPopup } from "./utils.js";
 import { setStatus } from "./ui.js";
 import { checkHarvestStatus, startHarvest, stopHarvest, loadHarvestNodeCandidates, loadHarvestHistory } from "./harvest.js";
 import {
@@ -94,17 +94,6 @@ import {
   broadcastOfflineTx,
   checkAlreadyBroadcastStatus,
 } from "./offline.js";
-import {
-  createSponsorshipRequest,
-  downloadSponsorshipRequestJson,
-  parseSponsorshipRequestJson,
-  verifySponsorshipRequest,
-  hasApprovedBefore,
-  approveSponsorshipRequest,
-  buildCosignInfo,
-  downloadCosignInfoJson,
-  parseCosignInfoJson,
-} from "./feeDelegation.js";
 import QRCode from "https://esm.sh/qrcode";
 import { QRCodeGenerator } from "https://esm.sh/symbol-qr-library";
 import { firstValueFrom } from "https://esm.sh/rxjs";
@@ -157,9 +146,6 @@ window.addEventListener("load", async () => {
   const restrictionMosaicAddressPage = document.getElementById("restriction-mosaic-address-page");
   const offlineTxCreatePage = document.getElementById("offline-tx-create-page");
   const offlineBroadcastPage = document.getElementById("offline-broadcast-page");
-  const feeDelegationMenuPage = document.getElementById("fee-delegation-menu-page");
-  const feeDelegationUserPage = document.getElementById("fee-delegation-user-page");
-  const feeDelegationOwnerPage = document.getElementById("fee-delegation-owner-page");
 
   // ============================
   // ページ切替
@@ -386,13 +372,6 @@ window.addEventListener("load", async () => {
 
     document.getElementById("selected-mosaic-id").value = 
       item.querySelector(".mosaic-id")?.textContent;
-
-    // ⚠️ #send-mosaic-list は account.js が生成したHTML(#mosaic-list)を
-    // innerHTMLでコピーしただけなので、item.onclickで設定されるはずの
-    // 残高(selected-mosaic-balance)がここまで反映されていなかった。
-    // 明示的にコピー先の .mosaic-amount から取得してセットする。
-    document.getElementById("selected-mosaic-balance").textContent = 
-      item.querySelector(".mosaic-amount")?.textContent ?? "---";
 
     cameFromMosaicList = false;
     if (backSendBtn) backSendBtn.textContent = "← トークン選択へ戻る";
@@ -655,7 +634,7 @@ window.addEventListener("load", async () => {
   document.getElementById("submit-multisig-send-btn")?.addEventListener("click", async () => {
     const multisigAddress = document.getElementById("multisig-send-from-select").value;
     const recipientAddress = document.getElementById("multisig-send-recipient").value.trim();
-    const amountRaw = document.getElementById("multisig-send-amount").value.trim();
+    const amountXym = parseFloat(document.getElementById("multisig-send-amount").value) || 0;
     const message = document.getElementById("multisig-send-message").value;
 
     if (!multisigAddress) {
@@ -664,25 +643,6 @@ window.addEventListener("load", async () => {
     }
     if (!recipientAddress) {
       setStatus("multisig-send-status", "宛先アドレスを入力してください。", "error");
-      return;
-    }
-
-    // ⚠️ 以前は amountRaw を Number.parseFloat(...) || 0 としていたため、
-    // 未入力・不正な文字列・負の値でもエラーにならず、黙って「モザイクなし
-    // (メッセージのみ)」の提案として処理されてしまっていた。
-    // ハッシュロック(10XYM)+承認待ちを伴う重い操作なので、金額の入力ミスは
-    // 明示的にエラーとして弾く(メッセージのみを送りたい場合は数量欄を
-    // 空のままにしてもらい、その場合のみ0扱いを許可する)。
-    let amountXym = 0;
-    if (amountRaw !== "") {
-      amountXym = Number(amountRaw);
-      if (!Number.isFinite(amountXym) || amountXym < 0) {
-        setStatus("multisig-send-status", "数量が不正です。", "error");
-        return;
-      }
-    }
-    if (amountXym === 0 && message.trim() === "") {
-      setStatus("multisig-send-status", "数量またはメッセージのいずれかを入力してください。", "error");
       return;
     }
 
@@ -700,22 +660,6 @@ window.addEventListener("load", async () => {
     }
   });
 
-  // ⚠️ 連署の送信(PUTが200を返すこと)と、実際にトランザクションが
-  // 確定して送金が実行されることは別物。以前はここを区別せず
-  // 「完了しました」と表示していたため、実際には反映されていない場合にも
-  // ユーザーが気づけなかった。cosignPending()が返すfinalStatusを見て、
-  // 状況に応じた正確な文言を組み立てる。
-  function describeCosignResult(result) {
-    if (result?.finalStatus === "confirmed") {
-      return "✅ 送金が完了しました(連署によりトランザクションが確定しました)。";
-    }
-    if (result?.finalStatus === "failed") {
-      const reason = result?.finalStatusDetail?.code ? `(理由: ${result.finalStatusDetail.code})` : "";
-      return `❌ 連署は送信されましたが、トランザクションは失敗しました${reason}。有効期限切れの可能性があります。`;
-    }
-    return "連署を送信しました。ただし、まだネットワークで確定したかは確認できていません。しばらくしてから一覧を再読み込みして確認してください。";
-  }
-
   document.getElementById("multisig-pending-list")?.addEventListener("click", async e => {
     const btn = e.target.closest('[data-action="cosign"]');
     if (!btn) return;
@@ -724,8 +668,8 @@ window.addEventListener("load", async () => {
     btn.disabled = true;
     btn.textContent = "署名中...";
     try {
-      const result = await cosignPending(hash);
-      alert(describeCosignResult(result));
+      await cosignPending(hash);
+      alert("✅ 連署を送信しました。");
       await loadPendingPartialTransactions();
     } catch (e) {
       console.error("cosignPending error:", e);
@@ -742,14 +686,11 @@ window.addEventListener("load", async () => {
     const container = document.getElementById("multisend-rows");
     const row = document.createElement("div");
     row.className = "multisend-row";
-    // ⚠️ data はCSVインポート由来の可能性があり、フィールドに " を含む
-    // 細工されたCSVだと属性からエスケープしてHTMLインジェクションが可能なため、
-    // value属性へ埋め込む前に必ずエスケープする
     row.innerHTML = `
-      <input class="input-box ms-address" placeholder="送金先アドレス" value="${escapeHtml(data.address)}">
-      <input class="input-box ms-mosaic" placeholder="mosaic (例: symbol.xym)" value="${escapeHtml(data.mosaic)}">
-      <input class="input-box ms-amount" type="number" min="0" step="any" placeholder="数量" value="${escapeHtml(data.amount)}">
-      <input class="input-box ms-message" placeholder="メッセージ" value="${escapeHtml(data.message)}">
+      <input class="input-box ms-address" placeholder="送金先アドレス" value="${data.address}">
+      <input class="input-box ms-mosaic" placeholder="mosaic (例: symbol.xym)" value="${data.mosaic}">
+      <input class="input-box ms-amount" type="number" min="0" step="any" placeholder="数量" value="${data.amount}">
+      <input class="input-box ms-message" placeholder="メッセージ" value="${data.message}">
       <button class="account-hide-btn" data-action="remove-row">削除</button>
     `;
     container.appendChild(row);
@@ -939,16 +880,14 @@ window.addEventListener("load", async () => {
       }
 
       setStatus("apostille-verify-status", `✅ ${matches.length}件の証明が見つかりました。`, "success");
-      // ⚠️ m.cert.fileName / owner / timestamp は他人が自由に設定できる
-      // 文字列(証明書作成者の入力そのまま)なので、必ずエスケープしてから表示する
       resultEl.innerHTML = matches
         .map(m => `
           <div class="harvest-history-item">
-            <div>Hash: ${escapeHtml(m.hash)}</div>
-            <div>高さ: ${escapeHtml(m.height)}</div>
-            <div>ファイル名: ${escapeHtml(m.cert.fileName || "---")}</div>
-            <div>所有者: ${escapeHtml(m.cert.owner)}</div>
-            <div>記録日時(証明書内): ${escapeHtml(m.cert.timestamp)}</div>
+            <div>Hash: ${m.hash}</div>
+            <div>高さ: ${m.height}</div>
+            <div>ファイル名: ${m.cert.fileName || "---"}</div>
+            <div>所有者: ${m.cert.owner}</div>
+            <div>記録日時(証明書内): ${m.cert.timestamp}</div>
           </div>
         `)
         .join("");
@@ -986,15 +925,14 @@ window.addEventListener("load", async () => {
       }
 
       setStatus("apostille-history-status", `${matches.length}件の履歴が見つかりました（古い順）。`, "success");
-      // ⚠️ こちらも他人が自由に設定できる文字列なのでエスケープする
       listEl.innerHTML = matches
         .map((m, i) => `
           <div class="harvest-history-item">
             <div>#${i + 1}</div>
-            <div>Hash: ${escapeHtml(m.hash)}</div>
-            <div>高さ: ${escapeHtml(m.height)}</div>
-            <div>所有者: ${escapeHtml(m.cert.owner)}</div>
-            <div>記録日時(証明書内): ${escapeHtml(m.cert.timestamp)}</div>
+            <div>Hash: ${m.hash}</div>
+            <div>高さ: ${m.height}</div>
+            <div>所有者: ${m.cert.owner}</div>
+            <div>記録日時(証明書内): ${m.cert.timestamp}</div>
           </div>
         `)
         .join("");
@@ -1357,295 +1295,6 @@ window.addEventListener("load", async () => {
     }
   });
 
-  // ============================
-  // 手数料代払い(スポンサーシップ)
-  // ============================
-
-  // --- メニュー ---
-  document.getElementById("menu-fee-delegation")?.addEventListener("click", () => {
-    showPage(feeDelegationMenuPage);
-  });
-  document.getElementById("back-advanced-fee-delegation")?.addEventListener("click", () => showPage(advancedPage));
-
-  // --- ユーザー画面 ---
-  function populateFeeDelegMosaicSelect() {
-    const select = document.getElementById("fee-deleg-req-mosaic");
-    if (!select) return;
-    const entries = Object.entries(appState.mosaicInfo ?? {});
-    select.innerHTML = entries.length
-      ? entries
-          .map(([id, info]) => `<option value="${id}">${info.mosaicName} (${id})</option>`)
-          .join("")
-      : `<option value="">-- 保有モザイクがありません --</option>`;
-  }
-
-  let feeDelegCosignInfoLoaded = null;
-
-  // feeDelegation.js の buildCosignInfo() / parseCosignInfoJson() が扱う
-  // コサイン情報は { aggregateHash, node } という形だが、
-  // multisig.js の loadPendingPartialTransactions() は汎用的に
-  // { hash, node } という形を期待しているため、ここでキー名を変換する。
-  function toExternalHashParam(cosignInfo) {
-    if (!cosignInfo) return null;
-    return { hash: cosignInfo.aggregateHash, node: cosignInfo.node };
-  }
-
-  document.getElementById("menu-fee-delegation-user")?.addEventListener("click", async () => {
-    document.getElementById("fee-deleg-user-balance").textContent =
-      document.getElementById("account-balance")?.textContent || "---";
-    populateFeeDelegMosaicSelect();
-    document.getElementById("fee-deleg-req-preview").style.display = "none";
-    setStatus("fee-deleg-req-status", "", "default");
-    showPage(feeDelegationUserPage);
-    await loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded));
-  });
-  document.getElementById("back-fee-delegation-menu-user")?.addEventListener("click", () => showPage(feeDelegationMenuPage));
-
-  let feeDelegRequestGenerated = null;
-
-  document.getElementById("fee-deleg-req-create-btn")?.addEventListener("click", () => {
-    const recipientAddress = document.getElementById("fee-deleg-req-recipient").value.trim();
-    const mosaicIdHex = document.getElementById("fee-deleg-req-mosaic").value;
-    const amount = document.getElementById("fee-deleg-req-amount").value;
-    const message = document.getElementById("fee-deleg-req-message").value;
-
-    try {
-      feeDelegRequestGenerated = createSponsorshipRequest({ recipientAddress, mosaicIdHex, amount, message });
-
-      document.getElementById("fee-deleg-req-preview-requester").textContent = feeDelegRequestGenerated.requesterAddress;
-      document.getElementById("fee-deleg-req-preview-recipient").textContent = feeDelegRequestGenerated.recipientAddress;
-      document.getElementById("fee-deleg-req-preview-mosaic").textContent =
-        `${feeDelegRequestGenerated.mosaicName} (${feeDelegRequestGenerated.mosaicId})`;
-      document.getElementById("fee-deleg-req-preview-amount").textContent = feeDelegRequestGenerated.amountDisplay;
-      document.getElementById("fee-deleg-req-preview").style.display = "block";
-      setStatus("fee-deleg-req-status", "依頼JSONを作成しました。オーナーへ渡してください。", "success");
-    } catch (e) {
-      console.error("createSponsorshipRequest error:", e);
-      feeDelegRequestGenerated = null;
-      document.getElementById("fee-deleg-req-preview").style.display = "none";
-      setStatus("fee-deleg-req-status", e.message || "作成に失敗しました。", "error");
-    }
-  });
-
-  document.getElementById("fee-deleg-req-download-btn")?.addEventListener("click", () => {
-    if (!feeDelegRequestGenerated) return;
-    downloadSponsorshipRequestJson(feeDelegRequestGenerated);
-  });
-
-  document.getElementById("fee-deleg-req-copy-btn")?.addEventListener("click", () => {
-    if (!feeDelegRequestGenerated) return;
-    navigator.clipboard.writeText(JSON.stringify(feeDelegRequestGenerated, null, 2));
-    showPopup("依頼JSONをコピーしました");
-  });
-
-  // ユーザー画面のタブ切替
-  setupTabGroup(
-    ["fee-deleg-user-tab-send", "fee-deleg-user-tab-status", "fee-deleg-user-tab-history"],
-    ["fee-deleg-user-content-send", "fee-deleg-user-content-status", "fee-deleg-user-content-history"],
-    [
-      null,
-      () => loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded)),
-      () => loadRecentTx("fee-deleg-user-history-list"),
-    ]
-  );
-
-  // ユーザー画面: オーナーから受け取った「コサイン情報」の読み込み
-  // (自分の接続ノードにまだ伝播していない場合でも、指定ノードから直接確認できる)
-  document.getElementById("fee-deleg-user-cosign-info-file")?.addEventListener("change", async e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      feeDelegCosignInfoLoaded = parseCosignInfoJson(text);
-      setStatus(
-        "fee-deleg-user-cosign-info-status",
-        `✅ 読み込みました。指定ノードを確認します… (Hash: ${feeDelegCosignInfoLoaded.aggregateHash})`,
-        "success"
-      );
-      await loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded));
-    } catch (e) {
-      console.error("parseCosignInfoJson error:", e);
-      feeDelegCosignInfoLoaded = null;
-      setStatus("fee-deleg-user-cosign-info-status", e.message || "読み込みに失敗しました。", "error");
-    }
-  });
-
-  // ユーザー画面: コサインボタン(マルチシグ署名と同じ仕組み)
-  // data-node が付いている場合(コサイン情報から直接取得した項目)は、
-  // 自分の接続ノードではなく、そのノードへ直接コサインをアナウンスする。
-  document.getElementById("fee-deleg-user-status-list")?.addEventListener("click", async e => {
-    const btn = e.target.closest('[data-action="cosign"]');
-    if (!btn) return;
-
-    const hash = btn.dataset.hash;
-    const nodeOverride = btn.dataset.node || null;
-    btn.disabled = true;
-    btn.textContent = "署名中...";
-    try {
-      const result = await cosignPending(hash, nodeOverride);
-      alert(describeCosignResult(result));
-      await loadPendingPartialTransactions("fee-deleg-user-status-list", toExternalHashParam(feeDelegCosignInfoLoaded));
-    } catch (e) {
-      console.error("cosignPending error:", e);
-      if (!e?.cancelled) alert(e.message || "連署に失敗しました。");
-      btn.disabled = false;
-      btn.textContent = "署名する";
-    }
-  });
-
-  // --- オーナー画面 ---
-  document.getElementById("menu-fee-delegation-owner")?.addEventListener("click", async () => {
-    document.getElementById("fee-deleg-owner-balance").textContent =
-      document.getElementById("account-balance")?.textContent || "---";
-    document.getElementById("fee-deleg-owner-request-file").value = "";
-    document.getElementById("fee-deleg-owner-request-preview").style.display = "none";
-    document.getElementById("fee-deleg-owner-cosign-info").style.display = "none";
-    setStatus("fee-deleg-owner-request-status", "", "default");
-    showPage(feeDelegationOwnerPage);
-    await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
-  });
-  document.getElementById("back-fee-delegation-menu-owner")?.addEventListener("click", () => showPage(feeDelegationMenuPage));
-
-  let feeDelegRequestLoaded = null;
-  let feeDelegVerification = null;
-  let feeDelegCosignInfoGenerated = null;
-
-  document.getElementById("fee-deleg-owner-request-file")?.addEventListener("change", async e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    feeDelegVerification = null;
-
-    try {
-      const text = await file.text();
-      feeDelegRequestLoaded = parseSponsorshipRequestJson(text);
-
-      document.getElementById("fee-deleg-owner-preview-requester").textContent = feeDelegRequestLoaded.requesterAddress;
-      document.getElementById("fee-deleg-owner-preview-recipient").textContent = feeDelegRequestLoaded.recipientAddress;
-      document.getElementById("fee-deleg-owner-preview-mosaic").textContent =
-        `${feeDelegRequestLoaded.mosaicName ?? feeDelegRequestLoaded.mosaicId} (${feeDelegRequestLoaded.mosaicId})`;
-      document.getElementById("fee-deleg-owner-preview-amount").textContent = feeDelegRequestLoaded.amountDisplay;
-      document.getElementById("fee-deleg-owner-preview-message").textContent = feeDelegRequestLoaded.message || "(なし)";
-      document.getElementById("fee-deleg-owner-request-preview").style.display = "block";
-      setStatus("fee-deleg-owner-request-status", "依頼内容を検証しています...", "default");
-
-      // ⚠️ 依頼者の自己申告(amountDisplay/divisibility)を鵜呑みにせず、
-      // オーナー側で残高・公開鍵とアドレスの整合性・実際のdivisibilityを
-      // 独立に確認する。承認前の最終判断材料として表示する。
-      const requestForVerification = feeDelegRequestLoaded;
-      const verification = await verifySponsorshipRequest(requestForVerification);
-      if (feeDelegRequestLoaded !== requestForVerification) return; // 検証中に別ファイルが読み込まれた場合は破棄
-      feeDelegVerification = verification;
-
-      if (verification.recalculatedAmountDisplay != null) {
-        document.getElementById("fee-deleg-owner-preview-amount").textContent =
-          `${verification.recalculatedAmountDisplay}（依頼者側の自己申告: ${feeDelegRequestLoaded.amountDisplay}）`;
-      }
-
-      if (hasApprovedBefore(feeDelegRequestLoaded)) {
-        verification.warnings = [
-          "この依頼は過去に承認済みの可能性があります(同一内容の依頼です)。",
-          ...verification.warnings,
-        ];
-      }
-
-      setStatus(
-        "fee-deleg-owner-request-status",
-        verification.warnings.length
-          ? `⚠️ ${verification.warnings.length}件の警告: ` +
-            verification.warnings.map((w, i) => `(${i + 1}) ${w}`).join("　")
-          : "✅ 独立検証で問題は見つかりませんでした。",
-        verification.warnings.length ? "error" : "success"
-      );
-    } catch (e) {
-      console.error("parseSponsorshipRequestJson error:", e);
-      feeDelegRequestLoaded = null;
-      document.getElementById("fee-deleg-owner-request-preview").style.display = "none";
-      setStatus("fee-deleg-owner-request-status", e.message || "読み込みに失敗しました。", "error");
-    }
-  });
-
-  document.getElementById("fee-deleg-owner-approve-btn")?.addEventListener("click", async () => {
-    if (!feeDelegRequestLoaded) return;
-
-    setStatus("fee-deleg-owner-request-status", "確認画面を表示しています...");
-    try {
-      const requestSnapshot = feeDelegRequestLoaded;
-      const hash = await approveSponsorshipRequest(feeDelegRequestLoaded, feeDelegVerification);
-
-      // アグリゲートボンデッドTxは、このノードのローカルキャッシュにのみ載る。
-      // 依頼者が別ノードに接続していると「支払い状況」タブに表示されないことが
-      // あるため、ノード情報を含む「コサイン情報」を発行し、渡せるようにする。
-      feeDelegCosignInfoGenerated = buildCosignInfo(requestSnapshot, hash);
-
-      setStatus(
-        "fee-deleg-owner-request-status",
-        `✅ アナウンスしました。依頼者がコサインすると送金が完了します。Hash: ${hash}`,
-        "success"
-      );
-      document.getElementById("fee-deleg-owner-request-file").value = "";
-      document.getElementById("fee-deleg-owner-request-preview").style.display = "none";
-      feeDelegRequestLoaded = null;
-
-      document.getElementById("fee-deleg-owner-cosign-info-hash").textContent = hash;
-      document.getElementById("fee-deleg-owner-cosign-info-node").textContent = feeDelegCosignInfoGenerated.node;
-      document.getElementById("fee-deleg-owner-cosign-info").style.display = "block";
-
-      await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
-    } catch (e) {
-      if (e?.cancelled) {
-        setStatus("fee-deleg-owner-request-status", "キャンセルしました。");
-        return;
-      }
-      console.error("approveSponsorshipRequest error:", e);
-      setStatus("fee-deleg-owner-request-status", e.message || "処理に失敗しました。", "error");
-    }
-  });
-
-  document.getElementById("fee-deleg-owner-cosign-info-download-btn")?.addEventListener("click", () => {
-    if (!feeDelegCosignInfoGenerated) return;
-    downloadCosignInfoJson(feeDelegCosignInfoGenerated);
-  });
-
-  document.getElementById("fee-deleg-owner-cosign-info-copy-btn")?.addEventListener("click", () => {
-    if (!feeDelegCosignInfoGenerated) return;
-    navigator.clipboard.writeText(JSON.stringify(feeDelegCosignInfoGenerated, null, 2));
-    showPopup("コサイン情報をコピーしました");
-  });
-
-  // オーナー画面のタブ切替
-  setupTabGroup(
-    ["fee-deleg-owner-tab-pending", "fee-deleg-owner-tab-locks", "fee-deleg-owner-tab-settings", "fee-deleg-owner-tab-log"],
-    ["fee-deleg-owner-content-pending", "fee-deleg-owner-content-locks", "fee-deleg-owner-content-settings", "fee-deleg-owner-content-log"],
-    [
-      () => loadPendingPartialTransactions("fee-deleg-owner-pending-list"),
-      null,
-      null,
-      null,
-    ]
-  );
-
-  // オーナー画面: コサイン待ち一覧のコサインボタン
-  document.getElementById("fee-deleg-owner-pending-list")?.addEventListener("click", async e => {
-    const btn = e.target.closest('[data-action="cosign"]');
-    if (!btn) return;
-
-    const hash = btn.dataset.hash;
-    const nodeOverride = btn.dataset.node || null;
-    btn.disabled = true;
-    btn.textContent = "署名中...";
-    try {
-      const result = await cosignPending(hash, nodeOverride);
-      alert(describeCosignResult(result));
-      await loadPendingPartialTransactions("fee-deleg-owner-pending-list");
-    } catch (e) {
-      console.error("cosignPending error:", e);
-      if (!e?.cancelled) alert(e.message || "連署に失敗しました。");
-      btn.disabled = false;
-      btn.textContent = "署名する";
-    }
-  });
 
   async function updateRootNamespaceFeeEstimate() {
     const el = document.getElementById("root-namespace-fee-estimate");

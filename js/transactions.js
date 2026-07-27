@@ -2,7 +2,7 @@
 
 import { appState, NetworkType, getXymMosaicIdHex } from "./config.js";
 import { addCallback, getBlockTimestamp } from "./ws.js";
-import { hexToBytes, escapeHtml } from "./utils.js";
+import { hexToBytes } from "./utils.js";
 
 const txMap = {};
 
@@ -24,7 +24,7 @@ function formatTimestamp(symbolTimestamp) {
    v3 Message Decode
    0x00 PlainMessage, 0x01 EncryptedMessage, 0xFF RawMessage, 0xFE Harvesting Delegation
 ============================================================ */
-export function decodeMessage(payload) {
+function decodeMessage(payload) {
   if (!payload) return "(no message)";
 
   try {
@@ -59,7 +59,7 @@ export function decodeMessage(payload) {
      v3 SDKに fromDecodedAddressHexString のような静的メソッドは無いため、
      16進文字列→バイト列に変換してコンストラクタに渡す。
 ============================================================ */
-export function formatAddress(address) {
+function formatAddress(address) {
   if (!address) return "---";
 
   if (typeof address !== "string") {
@@ -198,11 +198,9 @@ export function createTxCard(txInfo) {
 
   let mosaicHtml = "";
   if (mosaics && mosaics.length) {
-    // mosaic.name はネームスペース名解決に失敗した場合など不定形の値が
-    // 入りうるため、念のためエスケープしておく
     mosaicHtml = mosaics.map(mosaic => `
       <div class="tx-mosaic">
-        <span class="tx-mosaic-name">${escapeHtml(mosaic.name)}</span>
+        <span class="tx-mosaic-name">${mosaic.name}</span>
         <span class="tx-mosaic-amount ${amountClass}">${sign}${mosaic.amount}</span>
       </div>
     `).join("");
@@ -213,10 +211,10 @@ export function createTxCard(txInfo) {
       <div class="tx-body">
         <div class="tx-title ${labelClass}">${label}</div>
         <div class="tx-status">${state.toUpperCase()}</div>
-        <div class="tx-address"><span class="tx-address-label">送金元</span><span class="tx-address-value">${escapeHtml(sender ?? "---")}</span></div>
-        <div class="tx-address"><span class="tx-address-label">送金先</span><span class="tx-address-value">${escapeHtml(recipient ?? "---")}</span></div>
+        <div class="tx-address"><span class="tx-address-label">送金元</span><span class="tx-address-value">${sender ?? "---"}</span></div>
+        <div class="tx-address"><span class="tx-address-label">送金先</span><span class="tx-address-value">${recipient ?? "---"}</span></div>
         ${mosaicHtml}
-        <div class="tx-message"><span class="tx-message-label">メッセージ</span><span class="tx-message-value">${escapeHtml(msg)}</span></div>
+        <div class="tx-message"><span class="tx-message-label">メッセージ</span><span class="tx-message-value">${msg}</span></div>
         ${state === "confirmed" && timestamp ? `<div class="tx-time">🕒 ${formatTimestamp(timestamp)}</div>` : ""}
       </div>
     </div>

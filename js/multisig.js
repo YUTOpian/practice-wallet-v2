@@ -12,113 +12,10 @@
 
 import { appState, getXymMosaicIdHex } from "./config.js";
 import { signTxOnly, signAndAnnounceTx, cosignTransactionHash, estimateFeeFromTx } from "./auth.js";
-import { hexToBytes, escapeHtml } from "./utils.js";
+import { hexToBytes } from "./utils.js";
 import { requestTxConfirmation, formatTxDeadline, TxCancelledError } from "./txConfirm.js";
-import { decodeMessage, formatAddress } from "./transactions.js";
-
-// REST APIが返す埋め込みトランザクションのtype値(数値)
-const EMBEDDED_TX_TYPE = {
-  TRANSFER: 16724,
-  MULTISIG_ACCOUNT_MODIFICATION: 16725,
-};
-
-/* ============================================================
-   埋め込みトランザクション1件を、連署前に人間が確認できる文言に変換する。
-
-   ⚠️ 「マルチシグ連署」は、他人(オーナー/提案者)が作った内容に
-   自分の署名を追加する行為なので、署名する前に「実際に何を承認する
-   ことになるのか」(送金先・数量・メッセージ)を必ず表示する必要がある。
-   以前はハッシュ値だけを見せて署名させていた(内容が一切確認できない
-   「ブラインド署名」になっていた)。
-============================================================ */
-function describeEmbeddedTransaction(tx) {
-  const type = Number(tx.type);
-
-  if (type === EMBEDDED_TX_TYPE.TRANSFER) {
-    const recipient = formatAddress(tx.recipientAddress);
-    const xymId = getXymMosaicIdHex();
-
-    const mosaicsText = (tx.mosaics || [])
-      .map((m) => {
-        const idHex = String(m.id ?? "").toUpperCase();
-        if (idHex === xymId) {
-          const xym = (Number(m.amount) / 1_000_000).toLocaleString("ja-JP", { maximumFractionDigits: 6 });
-          return `${xym} XYM`;
-        }
-        return `${m.amount}（モザイクID: ${idHex}、可分性不明のため未換算の生数量）`;
-      })
-      .join(", ") || "(モザイクなし)";
-
-    const message = decodeMessage(tx.message);
-    return `送金 → 宛先: ${recipient} / 数量: ${mosaicsText} / メッセージ: ${message}`;
-  }
-
-  if (type === EMBEDDED_TX_TYPE.MULTISIG_ACCOUNT_MODIFICATION) {
-    const additions = tx.addressAdditions ?? [];
-    const deletions = tx.addressDeletions ?? [];
-    return (
-      `マルチシグ設定変更 → 最小承認者数の増減: ${tx.minApprovalDelta ?? 0} / ` +
-      `最小削除承認者数の増減: ${tx.minRemovalDelta ?? 0} / ` +
-      `追加: ${additions.length ? additions.map(formatAddress).join(", ") : "(なし)"} / ` +
-      `削除: ${deletions.length ? deletions.map(formatAddress).join(", ") : "(なし)"}`
-    );
-  }
-
-  // 未対応の種類は種別コードだけでも必ず表示する(内容を隠さない)
-  return `その他のトランザクション（type: ${tx.type}）。この画面では内容を要約表示できません。署名前に内容を把握できているか十分ご注意ください。`;
-}
-
-function describeEmbeddedTransactions(embedded) {
-  return (embedded || []).map((item) => describeEmbeddedTransaction(item.transaction ?? item));
-}
-
-/* ============================================================
-   連署の実効性チェック:
-   埋め込みトランザクションの signerPublicKey(＝送金元として必要な
-   署名者)と、いま実際に連署しようとしている自分のアカウントの公開鍵が
-   一致しているかを確認する。
-
-   ⚠️ 「連署パケット自体はノードに正しく記録されるが、実際には送金元の
-   要件を満たしていない」というケースは、エラーが一切出ないまま
-   Txが永遠に partial(未確定)のまま残る、という分かりにくい不具合を
-   引き起こす。これを未然に警告できるようにする。
-
-   ただし、送金元がマルチシグアカウントの場合はsignerPublicKeyが
-   マルチシグアカウント自身の鍵になり、実際に連署すべきなのは
-   その"連署者"(cosignatory)なので、単純な不一致だけでは
-   「間違ったアカウント」と断定できない。そのため警告文でも
-   マルチシグの可能性には触れる形にする。
-============================================================ */
-function checkSignerMismatch(embedded) {
-  const requiredSigners = [
-    ...new Set(
-      (embedded || [])
-        .map((item) => (item.transaction ?? item).signerPublicKey)
-        .filter(Boolean)
-        .map((pk) => pk.toUpperCase())
-    ),
-  ];
-
-  const myPubKeyUpper = (appState.currentPubKey || "").toUpperCase();
-  const matches = requiredSigners.length === 0 || requiredSigners.includes(myPubKeyUpper);
-
-  return { requiredSigners, matches };
-}
 
 const HASH_LOCK_AMOUNT = 10_000_000n; // 10 XYM (microXYM)
-
-/* ============================================================
-   ハッシュロックの承認待ちが「タイムアウト」した場合専用のエラー。
-   (ネットワーク混雑等で実際にはこの後ハッシュロック自体は確定する
-   可能性があるため、「失敗」と区別して呼び出し側でリカバリー情報を
-   案内できるようにする)
-============================================================ */
-export class HashLockTimeoutError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "HashLockTimeoutError";
-  }
-}
 
 // アグリゲートボンデッドTx本体の有効期限(秒)。proposeBondedAggregate内の
 // createTransactionFromTypedDescriptor() 呼び出しと必ず同じ値を使うこと。
@@ -157,25 +54,7 @@ async function waitConfirmed(hash, { timeoutMs = 90000, intervalMs = 3000 } = {}
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
-  throw new HashLockTimeoutError("ハッシュロックの承認待ちがタイムアウトしました");
-}
-
-/* ============================================================
-   署名済みのアグリゲートボンデッドTxを /transactions/partial へ
-   アナウンスする。proposeBondedAggregate 本体からも、ハッシュロックの
-   承認待ちがタイムアウトした後の手動リトライからも使える共通処理。
-============================================================ */
-export async function announcePartialAggregate(aggregateJsonPayload) {
-  const res = await fetch(new URL("/transactions/partial", appState.NODE), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: aggregateJsonPayload,
-  });
-  const result = await res.json();
-  if (!res.ok) {
-    throw new Error(result.message ?? "アグリゲートボンデッドTxのアナウンスに失敗しました");
-  }
-  return result;
+  throw new Error("ハッシュロックの承認待ちがタイムアウトしました");
 }
 
 /* ============================================================
@@ -253,35 +132,18 @@ export async function proposeBondedAggregate(embeddedTransactions, cosignerCount
 
   const hashLockTxHash = await signAndAnnounceTx(hashLockTx);
 
-  try {
-    await waitConfirmed(hashLockTxHash);
-  } catch (e) {
-    if (e instanceof HashLockTimeoutError) {
-      // ⚠️ ここで例外を投げてaggregateJsonPayloadを握りつぶすと、
-      // ハッシュロック自体は後から確定してしまい(ネットワーク混雑で
-      // 単に90秒以内に承認が確認できなかっただけの可能性がある)、
-      // 誰にも使われないまま10XYMがHASH_LOCK_DURATION(約7時間)分
-      // ロックされ続けるだけになってしまう。
-      // 署名済みペイロードをコンソールに残し、ハッシュロックが実際には
-      // 確定していた場合に手動で再アナウンスできるようにしておく。
-      console.warn(
-        "[multisig] ハッシュロックの承認待ちがタイムアウトしました。" +
-        "ハッシュロック自体は後から確定する可能性があります。もし確定していた場合、" +
-        "以下のペイロードを announcePartialAggregate(aggregateJsonPayload) " +
-        "(multisig.jsからexport済み)に渡せば提案を送信し直せます。",
-        { hashLockTxHash, aggregateJsonPayload }
-      );
-      throw new HashLockTimeoutError(
-        `ハッシュロックの承認待ちがタイムアウトしました(Hash: ${hashLockTxHash})。` +
-        "ハッシュロック自体は後から確定する可能性があります。少し待ってから" +
-        "もう一度提案するか、ブラウザのコンソールに出力された復旧手順で再送信してください。"
-      );
-    }
-    throw e;
-  }
+  await waitConfirmed(hashLockTxHash);
 
   // ハッシュロック確定後、ボンデッドTxを/transactions/partialへ
-  await announcePartialAggregate(aggregateJsonPayload);
+  const res = await fetch(new URL("/transactions/partial", appState.NODE), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: aggregateJsonPayload,
+  });
+  const result = await res.json();
+  if (!res.ok) {
+    throw new Error(result.message ?? "アグリゲートボンデッドTxのアナウンスに失敗しました");
+  }
 
   return aggregateHash.toString();
 }
@@ -384,23 +246,6 @@ export async function updateMultisigSettings({
 }
 
 /* ============================================================
-   対象マルチシグアカウントの minApproval を取得する
-   (sendFromMultisig で、必要な追加連署者数を正しく見積もるために使う)
-============================================================ */
-async function fetchMultisigMinApproval(address) {
-  try {
-    const res = await fetch(`${appState.NODE}/account/${address}/multisig`);
-    if (res.status === 404) return null;
-    const json = await res.json();
-    const minApproval = Number(json.multisig?.minApproval);
-    return Number.isFinite(minApproval) ? minApproval : null;
-  } catch (e) {
-    console.warn("fetchMultisigMinApproval error:", address, e);
-    return null;
-  }
-}
-
-/* ============================================================
    マルチシグ送金
 ============================================================ */
 export async function sendFromMultisig({ multisigAddress, recipientAddress, amountXym, message }) {
@@ -439,24 +284,16 @@ export async function sendFromMultisig({ multisigAddress, recipientAddress, amou
     new appState.sdkCore.PublicKey(multisigPublicKey)
   );
 
-  // ⚠️ 以前は常に 0 を渡していたが、それが正しいのは対象マルチシグの
-  // minApproval が 1 の場合のみだった。起案者自身の署名がそのまま
-  // 1人分の連署としてカウントされるので、必要な「追加」連署者数は
-  // (minApproval - 1)。minApproval が取得できない場合は
-  // 安全側(0)にフォールバックする。
-  const minApproval = await fetchMultisigMinApproval(multisigAddress);
-  const cosignerCount = minApproval != null ? Math.max(0, minApproval - 1) : 0;
-
-  return await proposeBondedAggregate([embeddedTx], cosignerCount, {
+  // 自分自身の署名(起案者)がマルチシグの連署者の1人としてそのままカウントされるため、
+  // ここでは追加の連署者数は指定しない(0)。承認数が足りない場合は他の連署者が
+  // 「マルチシグ署名」から追加で連署する。
+  return await proposeBondedAggregate([embeddedTx], 0, {
     typeLabel: "マルチシグ送金(提案)",
     sender: multisigAddress,
     recipient: recipientAddress,
     details: [
       { label: "数量", value: `${amountXym} XYM` },
       { label: "メッセージ", value: message || "(なし)" },
-      ...(minApproval != null
-        ? [{ label: "必要な承認数(minApproval)", value: `${minApproval}(うち自分の署名で1件済み)` }]
-        : []),
     ],
   });
 }
@@ -481,32 +318,15 @@ function renderPendingItemHtml(hash, transaction, nodeUrl) {
     (c) => c.signerPublicKey?.toUpperCase() === appState.currentPubKey?.toUpperCase()
   );
 
-  // ⚠️ 「署名する」ボタンを押すまで中身(送金先・数量・メッセージ等)が
-  // 全く分からないブラインド署名になってしまうため、一覧の時点でも要約を表示する。
-  const contentHtml = describeEmbeddedTransactions(transaction.transactions)
-    .map((desc) => `<div>内容: ${escapeHtml(desc)}</div>`)
-    .join("");
-
-  // ⚠️ 連署パケット自体はノードに正しく記録されるが、実際には自分の
-  // アカウントが必要な署名者ではないため、いつまでも確定しない
-  // ケースがあるため、一覧の時点でも気づけるよう警告を出す。
-  const signerCheck = checkSignerMismatch(transaction.transactions);
-  const signerWarningHtml =
-    !alreadySigned && !signerCheck.matches
-      ? `<div style="color:#f97316;">⚠️ 現在ログイン中のアカウントは、この提案の署名者と一致していない可能性があります(送金元がマルチシグアカウントの場合は問題ありません)</div>`
-      : "";
-
   return `
     <div class="harvest-history-item">
-      <div>Hash: ${escapeHtml(hash)}</div>
-      ${contentHtml}
+      <div>Hash: ${hash}</div>
       <div>現在の連署数: ${cosigCount}</div>
-      ${signerWarningHtml}
       <div>${alreadySigned ? "✅ 署名済み" : ""}</div>
       ${
         alreadySigned
           ? ""
-          : `<button class="account-hide-btn" data-action="cosign" data-hash="${escapeHtml(hash)}" data-node="${escapeHtml(nodeUrl ?? "")}">署名する</button>`
+          : `<button class="account-hide-btn" data-action="cosign" data-hash="${hash}" data-node="${nodeUrl ?? ""}">署名する</button>`
       }
     </div>
   `;
@@ -585,108 +405,14 @@ export async function loadPendingPartialTransactions(elId = "multisig-pending-li
    (相手から伝えられた「アナウンス先ノード」に確実に届けるため)。
    省略時は従来通り自分の接続中ノード(appState.NODE)を使う。
 ============================================================ */
-/* ============================================================
-   連署(コサイン)パケットを1ノードへPUTする。
-   レスポンスが200でも「そのノードが受理して転送した」という
-   意味でしかなく、実際に反映された保証ではない。
-============================================================ */
-async function announceCosignature(nodeUrl, cosignature) {
-  const res = await fetch(new URL("/transactions/cosignature", nodeUrl), {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(cosignature),
-  });
-  const result = await res.json();
-  if (!res.ok) {
-    throw new Error(result.message ?? "連署のアナウンスに失敗しました");
-  }
-  return result;
-}
-
-/* ============================================================
-   短時間だけトランザクションの状態をポーリングして確認する。
-   (連署の送信が成功しても、実際に確定したかどうかは別問題であり、
-   これを確認せずに「完了しました」と表示していたのが実害のある不具合
-   だったため、必ずここで確認してから呼び出し側へ結果を返す)
-============================================================ */
-async function pollTransactionStatus(nodeUrl, hash, { attempts = 6, intervalMs = 2000 } = {}) {
-  for (let i = 0; i < attempts; i++) {
-    try {
-      const res = await fetch(`${nodeUrl}/transactionStatus/${hash}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.group === "confirmed" || json.group === "failed") {
-          return json;
-        }
-      }
-    } catch {
-      // ネットワークエラーは無視して次のポーリングへ
-    }
-    if (i < attempts - 1) {
-      await new Promise((r) => setTimeout(r, intervalMs));
-    }
-  }
-  return null; // まだ確定していない(要:後で改めて確認)
-}
-
 export async function cosignPending(transactionHashHex, nodeUrlOverride = null) {
   const nodeUrl = nodeUrlOverride || appState.NODE;
-
-  // ⚠️ 以前はハッシュ値だけを見せて連署するかどうかを聞いていた
-  // (＝実際に何を承認することになるのか、ここでは一切確認できなかった)。
-  // 連署は他人が作った内容を承認する行為なので、署名前に必ず
-  // 対象の保留中トランザクションを取得し、内容を確認できるようにする。
-  const found = await fetchPartialTransactionByHash(nodeUrl, transactionHashHex);
-  const embeddedDescriptions = found?.transaction
-    ? describeEmbeddedTransactions(found.transaction.transactions)
-    : null;
-
-  const deadlineText = found?.transaction ? formatTxDeadline(found.transaction) : null;
-  const deadlineMs = (() => {
-    try {
-      const raw = found?.transaction?.deadline;
-      if (raw == null || !appState.epochAdjustment) return null;
-      return Number(appState.epochAdjustment) * 1000 + Number(raw);
-    } catch {
-      return null;
-    }
-  })();
-  const isExpired = deadlineMs != null && Date.now() > deadlineMs;
-
-  const signerCheck = found?.transaction
-    ? checkSignerMismatch(found.transaction.transactions)
-    : { requiredSigners: [], matches: true };
 
   const confirmed = await requestTxConfirmation({
     typeLabel: "マルチシグ連署(承認)",
     details: [
       { label: "対象トランザクションHash", value: transactionHashHex },
       ...(nodeUrlOverride ? [{ label: "アナウンス先ノード", value: nodeUrl }] : []),
-      ...(deadlineText ? [{ label: "有効期限", value: deadlineText }] : []),
-      ...(isExpired
-        ? [{ label: "⚠️ 期限切れの可能性", value: "有効期限を過ぎています。連署しても反映されない可能性が高いです。" }]
-        : []),
-      ...(!signerCheck.matches
-        ? [
-            {
-              label: "⚠️ 署名者が一致しない可能性",
-              value:
-                `この提案の送金元として必要な公開鍵(${signerCheck.requiredSigners.join(", ")})と、` +
-                `現在ログイン中のアカウントの公開鍵(${appState.currentPubKey ?? "---"})が一致しません。` +
-                "送金元がマルチシグアカウント自身であれば連署者の1人として問題ない場合がありますが、" +
-                "そうでない場合、連署はノードに記録されても要件を満たさず、" +
-                "いつまでも承認されずに残り続けます(エラーは出ません)。ログイン中のアカウントが正しいか確認してください。",
-            },
-          ]
-        : []),
-      ...(embeddedDescriptions && embeddedDescriptions.length
-        ? embeddedDescriptions.map((desc, i) => ({ label: `内容 ${i + 1}`, value: desc }))
-        : [
-            {
-              label: "⚠️ 内容確認",
-              value: "対象トランザクションの内容を取得できませんでした。中身を確認せずに署名することになりますが、よろしいですか？",
-            },
-          ]),
     ],
   });
   if (!confirmed) {
@@ -695,32 +421,15 @@ export async function cosignPending(transactionHashHex, nodeUrlOverride = null) 
 
   const cosignature = cosignTransactionHash(transactionHashHex);
 
-  // ⚠️ 「アグリゲートTxが実際にアナウンスされているノード」と、いま連署を
-  // 送ろうとしているノードが食い違っていると、そのノードは連署パケットを
-  // 「受け取って転送した」と200を返しつつも、紐付ける親のアグリゲートを
-  // ローカルに持っていないため実質的に反映されないことがある。
-  // これを避けるため、対象ノード(nodeUrl)に加えて、自分が現在接続中の
-  // ノード(appState.NODE)が別であればそちらにも送っておく。
-  const targetNodes = [...new Set([nodeUrl, appState.NODE].filter(Boolean))];
-  const announceResults = [];
-  for (const target of targetNodes) {
-    try {
-      announceResults.push(await announceCosignature(target, cosignature));
-    } catch (e) {
-      console.warn(`[multisig] 連署のアナウンスに失敗しました(${target}):`, e);
-    }
-  }
-  if (announceResults.length === 0) {
-    throw new Error("連署のアナウンスにすべてのノードで失敗しました。");
-  }
+  const res = await fetch(new URL("/transactions/cosignature", nodeUrl), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(cosignature),
+  });
 
-  // 送信して終わりにせず、実際にどうなったかを短時間だけ確認する
-  const statusResult = await pollTransactionStatus(nodeUrl, transactionHashHex);
-
-  return {
-    ...announceResults[0],
-    announcedTo: targetNodes,
-    finalStatus: statusResult?.group ?? "unknown", // "confirmed" | "failed" | "unknown"
-    finalStatusDetail: statusResult ?? null,
-  };
+  const result = await res.json();
+  if (!res.ok) {
+    throw new Error(result.message ?? "連署のアナウンスに失敗しました");
+  }
+  return result;
 }

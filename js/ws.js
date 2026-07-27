@@ -5,12 +5,7 @@ import { playSoundOnce } from "./utils.js";
 let ws = null;
 let uid = "";
 let callbacks = {};              // ← 再接続ごとにリセットされるように維持
-// 音のcallbackを二重登録しないため、登録済みアドレスをSetで管理する。
-// (単純なbooleanだと、自動再接続のたびにリセットされて再登録＝重複登録に
-//  なってしまうバグがあった。アドレス単位で管理することで、
-//  「同一アドレスでの再接続時は登録しない」「アカウント切替で別アドレスに
-//  なった場合はきちんと登録する」の両方を満たす)
-const soundRegisteredAddresses = new Set();
+let soundHooksRegistered = false; // ← 音のcallbackを二重登録しないため
 
 /* ============================================================
    WebSocket 開始
@@ -22,6 +17,8 @@ export function initWebSocket(address) {
 
   ws.onopen = () => {
     console.log("WS Connected:", wsUrl);
+
+    soundHooksRegistered = false;
   };
 
   ws.onmessage = e => {
@@ -103,7 +100,7 @@ export async function getBlockTimestamp(height) {
    未承認 / 承認の音を１回だけ登録
 ============================================================ */
 function registerSoundCallbacks(address) {
-  if (soundRegisteredAddresses.has(address)) return; // 🔥 2重登録防止(アドレス単位)
+  if (soundHooksRegistered) return; // 🔥 2重登録防止
 
   // 未承認トランザクション検知
   addCallback(`unconfirmedAdded/${address}`, () => {
@@ -115,5 +112,5 @@ function registerSoundCallbacks(address) {
     playSoundOnce("./sounds/ding2.ogg");
   });
 
-  soundRegisteredAddresses.add(address);
+  soundHooksRegistered = true;
 }
