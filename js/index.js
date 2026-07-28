@@ -350,7 +350,7 @@ window.addEventListener("load", async () => {
     showPage(welcomePage);
   });
 
-  // 送金画面に「保有トークン一覧」から直接入ったかどうか
+  // 送金画面に「保有モザイク一覧」から直接入ったかどうか
   let cameFromMosaicList = false;
   const backSendBtn = document.getElementById("back-send");
 
@@ -381,12 +381,12 @@ window.addEventListener("load", async () => {
       item.querySelector(".mosaic-id")?.textContent;
 
     cameFromMosaicList = false;
-    if (backSendBtn) backSendBtn.textContent = "← トークン選択へ戻る";
+    if (backSendBtn) backSendBtn.textContent = "← モザイク選択へ戻る";
     showPage(transferPage);
   });
 
   // ============================
-  // 保有トークン一覧から直接送金画面へ
+  // 保有モザイク一覧から直接送金画面へ
   // ============================
   document.getElementById("mosaic-list")?.addEventListener("click", e => {
     const item = e.target.closest(".mosaic-item");
@@ -1933,7 +1933,7 @@ window.addEventListener("load", async () => {
       .map((a) => {
         let sourceLabel;
         if (a.source === "mnemonic") {
-          sourceLabel = a.mnemonicPhrase ? "ニーモニック由来・取り出し可" : "ニーモニック由来・取り出し不可(このセッションのみ)";
+          sourceLabel = a.mnemonicPhrase ? "ニーモニック由来・取り出し可" : "ニーモニック由来・取り出し不可";
         } else {
           sourceLabel = "秘密鍵インポート";
         }
@@ -1941,6 +1941,22 @@ window.addEventListener("load", async () => {
       })
       .join("");
   }
+
+  // 選択中のアカウントが「取り出せるモード」(mnemonicPhraseを保存済み)の
+  // 場合のみ「ニーモニックを表示」ボタンを出す。「取り出せないモード」で
+  // 作成されたアカウントでは、そもそも表示できる見込みがないため
+  // ボタン自体を隠す。
+  function updateBackupMnemonicButtonVisibility() {
+    const select = document.getElementById("backup-account-select");
+    const mnemonicBtn = document.getElementById("backup-request-mnemonic-btn");
+    if (!select || !mnemonicBtn) return;
+
+    const account = appState.accounts.find((a) => a.id === select.value);
+    const canShowMnemonic = !!(account && account.source === "mnemonic" && account.mnemonicPhrase);
+    mnemonicBtn.style.display = canShowMnemonic ? "" : "none";
+  }
+
+  document.getElementById("backup-account-select")?.addEventListener("change", updateBackupMnemonicButtonVisibility);
 
   function resetBackupUI() {
     backupPendingAccount = null;
@@ -1958,7 +1974,10 @@ window.addEventListener("load", async () => {
     const canUse = canUseBackupFeature();
     document.getElementById("backup-no-password-notice").style.display = canUse ? "none" : "block";
     document.getElementById("backup-main").style.display = canUse ? "block" : "none";
-    if (canUse) populateBackupAccountSelect();
+    if (canUse) {
+      populateBackupAccountSelect();
+      updateBackupMnemonicButtonVisibility();
+    }
     showPage(backupPage);
   });
 

@@ -384,7 +384,7 @@ async function announcePersistentDelegationRequest(remoteKeyPair, vrfKeyPair, no
 }
 
 /* ============================================================
-   ステーキング(ハーベスト)履歴
+   ハーベスト履歴
    このアカウントが実際にハーベスト(ブロック生成)した履歴を
    /blocks?signerPublicKey= で取得して一覧表示する
 ============================================================ */
