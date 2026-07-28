@@ -78,6 +78,111 @@ async function deriveFromMnemonic(mnemonicPhrase, accountIndex = 0) {
 }
 
 /* ============================================================
+   バックアップ(ニーモニック / 秘密鍵のエクスポート)
+
+   ⚠ セキュリティ上重要な設計:
+   - 秘密鍵は各アカウントの privateKeyHex にそのまま保存されているため
+     常に取得できる。
+   - ニーモニックは "保存していない"。セッション中に実際にログイン/
+     アカウント追加で入力したものだけが currentMnemonicPhrase として
+     メモリ上に一時的に残る。ページ再読み込み後は失われ、復元できない
+     (BIP39の性質上、秘密鍵からニーモニックへ逆算することもできない)。
+   - 複数のニーモニックを扱った場合に誤ったアカウントへ表示してしまう
+     ことがないよう、表示前に必ず再導出して実際のアカウントの
+     privateKeyHex と一致するか検証する。
+============================================================ */
+
+// バックアップ機能を使うには、なりすまし防止のためパスワード確認を
+// 必須にする。パスワード未設定(平文保存のまま)の場合は、先に
+// 「設定」からパスワードを設定してもらう。
+export function canUseBackupFeature() {
+  return getVaultMode() === "encrypted";
+}
+
+/*
+  入力されたパスワードが、現在保存されている暗号化ボールトのものと
+  一致するか検証する。unlockVault() と異なり、アカウントの復元や
+  ログイン状態の変更は一切行わない「確認専用」の関数。
+*/
+export async function verifyVaultPassword(password) {
+  const raw = localStorage.getItem(VAULT_KEY);
+  if (!raw) {
+    throw new Error("保存されたアカウントがありません。");
+  }
+
+  let vault;
+  try {
+    vault = JSON.parse(raw);
+  } catch {
+    throw new Error("保存データの読み込みに失敗しました。");
+  }
+  if (!vault.encrypted) {
+    throw new Error("パスワードが設定されていません。");
+  }
+
+  const salt = base64ToBytes(vault.salt);
+  const iv = base64ToBytes(vault.iv);
+  const key = await deriveKeyFromPassword(password, salt);
+
+  try {
+    await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, base64ToBytes(vault.cipher));
+  } catch {
+    throw new Error("パスワードが正しくありません。");
+  }
+  return true;
+}
+
+/*
+  秘密鍵の取得。SSS Extension由来のアカウントは秘密鍵をこのアプリが
+  一切扱わない設計のため、対象外。
+*/
+export function getPrivateKeyForAccount(account) {
+  if (!account || account.source === "sss") {
+    throw new Error("SSS Extension由来のアカウントは、このアプリから秘密鍵を取得できません。");
+  }
+  if (!account.privateKeyHex) {
+    throw new Error("このアカウントには秘密鍵の情報がありません。");
+  }
+  return account.privateKeyHex;
+}
+
+/*
+  ニーモニックの取得。上記の制約により、以下の両方を満たす場合のみ
+  返すことができる:
+    ① このアカウントが mnemonic 由来である
+    ② 今のセッション中に入力されたニーモニック(currentMnemonicPhrase)が
+       残っており、かつ再導出した結果がこのアカウントの privateKeyHex と
+       一致する(＝取り違えでないことを確認できる)
+  いずれかを満たさない場合は、理由を含むエラーを投げる。
+*/
+export async function getVerifiedMnemonicForAccount(account) {
+  if (!account || account.source !== "mnemonic") {
+    throw new Error("このアカウントはニーモニック由来ではないため、ニーモニックは存在しません(秘密鍵のみインポートされたアカウントです)。");
+  }
+  if (!currentMnemonicPhrase) {
+    throw new Error(
+      "ニーモニックはこの端末に保存されていません。今のセッション中にログインまたは" +
+      "アカウント追加の際に入力したものだけが一時的にメモリ上に残る仕組みのため、" +
+      "ページを再読み込みすると失われ、二度と復元できません。表示するには、" +
+      "このアカウントの作成に使ったニーモニックを使って、もう一度ログインし直して" +
+      "から改めてお試しください。"
+    );
+  }
+
+  const rederivedKey = await deriveFromMnemonic(currentMnemonicPhrase, account.accountIndex ?? 0);
+  if (rederivedKey.toUpperCase() !== (account.privateKeyHex || "").toUpperCase()) {
+    throw new Error(
+      "現在メモリ上にあるニーモニックは、このアカウントの作成に使われたものと" +
+      "一致しません(別のニーモニックやアカウントを扱った可能性があります)。" +
+      "表示するには、このアカウントの作成に使ったニーモニックでもう一度" +
+      "ログインし直してください。"
+    );
+  }
+
+  return currentMnemonicPhrase;
+}
+
+/* ============================================================
    アカウント一覧への追加/更新
 ============================================================ */
 function upsertAccount(entry) {

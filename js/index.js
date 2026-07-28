@@ -34,6 +34,10 @@ import {
   addNextAccountFromCurrentMnemonic,
   hasCurrentMnemonic,
   switchNetwork,
+  canUseBackupFeature,
+  verifyVaultPassword,
+  getPrivateKeyForAccount,
+  getVerifiedMnemonicForAccount,
 } from "./auth.js";
 import {
   updateSwitcherVisibility,
@@ -113,6 +117,7 @@ window.addEventListener("load", async () => {
   const receivePage = document.getElementById("receive-page");
   const harvestPage = document.getElementById("harvest-page");
   const settingsPage = document.getElementById("settings-page");
+  const backupPage = document.getElementById("backup-page");
   const nodeSettingsPage = document.getElementById("node-settings-page");
   const feeSettingsPage = document.getElementById("fee-settings-page");
   const networkSwitchPage = document.getElementById("network-switch-page");
@@ -1899,6 +1904,156 @@ window.addEventListener("load", async () => {
 
   document.getElementById("menu-add-privatekey")?.addEventListener("click", () => {
     showPage(addAccountPrivatekeyPage);
+  });
+
+  // ============================
+  // バックアップ(ニーモニック・秘密鍵のエクスポート)
+  // ============================
+  let backupPendingAccount = null; // パスワード確認待ちのアカウント
+  let backupPendingType = null;    // "privateKey" | "mnemonic"
+
+  function populateBackupAccountSelect() {
+    const select = document.getElementById("backup-account-select");
+    if (!select) return;
+    // SSS Extension由来のアカウントは秘密鍵をこのアプリが扱わないため対象外
+    const candidates = appState.accounts.filter((a) => a.source !== "sss");
+    if (candidates.length === 0) {
+      select.innerHTML = `<option value="">-- エクスポート可能なアカウントがありません --</option>`;
+      return;
+    }
+    select.innerHTML = candidates
+      .map((a) => {
+        const sourceLabel = a.source === "mnemonic" ? "ニーモニック由来" : "秘密鍵インポート";
+        return `<option value="${a.id}">${a.label}（${sourceLabel}）</option>`;
+      })
+      .join("");
+  }
+
+  function resetBackupUI() {
+    backupPendingAccount = null;
+    backupPendingType = null;
+    document.getElementById("backup-password-step").style.display = "none";
+    document.getElementById("backup-password-input").value = "";
+    setStatus("backup-password-status", "", "default");
+    document.getElementById("backup-result").style.display = "none";
+    document.getElementById("backup-result-value").value = "";
+    setStatus("backup-select-status", "", "default");
+  }
+
+  document.getElementById("menu-backup")?.addEventListener("click", () => {
+    resetBackupUI();
+    const canUse = canUseBackupFeature();
+    document.getElementById("backup-no-password-notice").style.display = canUse ? "none" : "block";
+    document.getElementById("backup-main").style.display = canUse ? "block" : "none";
+    if (canUse) populateBackupAccountSelect();
+    showPage(backupPage);
+  });
+
+  document.getElementById("back-settings-backup")?.addEventListener("click", () => {
+    resetBackupUI();
+    showPage(settingsPage);
+  });
+
+  document.getElementById("backup-goto-password-setup-btn")?.addEventListener("click", () => {
+    showPage(passwordSetupPage);
+  });
+
+  function requestBackupReveal(type) {
+    const select = document.getElementById("backup-account-select");
+    const accountId = select?.value;
+    const account = appState.accounts.find((a) => a.id === accountId);
+
+    if (!account) {
+      setStatus("backup-select-status", "アカウントを選択してください。", "error");
+      return;
+    }
+    if (type === "mnemonic" && account.source !== "mnemonic") {
+      setStatus(
+        "backup-select-status",
+        "このアカウントは秘密鍵インポートのため、ニーモニックは存在しません。",
+        "error"
+      );
+      return;
+    }
+
+    backupPendingAccount = account;
+    backupPendingType = type;
+
+    document.getElementById("backup-result").style.display = "none";
+    document.getElementById("backup-password-input").value = "";
+    setStatus("backup-password-status", "", "default");
+    document.getElementById("backup-password-step").style.display = "block";
+    document.getElementById("backup-password-input").focus();
+  }
+
+  document.getElementById("backup-request-privatekey-btn")?.addEventListener("click", () => requestBackupReveal("privateKey"));
+  document.getElementById("backup-request-mnemonic-btn")?.addEventListener("click", () => requestBackupReveal("mnemonic"));
+
+  document.getElementById("backup-password-cancel-btn")?.addEventListener("click", () => {
+    document.getElementById("backup-password-step").style.display = "none";
+    document.getElementById("backup-password-input").value = "";
+    backupPendingAccount = null;
+    backupPendingType = null;
+  });
+
+  document.getElementById("backup-password-confirm-btn")?.addEventListener("click", async () => {
+    const pw = document.getElementById("backup-password-input").value;
+    if (!pw) {
+      setStatus("backup-password-status", "パスワードを入力してください。", "error");
+      return;
+    }
+    if (!backupPendingAccount || !backupPendingType) {
+      setStatus("backup-password-status", "アカウントが選択されていません。", "error");
+      return;
+    }
+
+    setStatus("backup-password-status", "確認中...");
+    try {
+      // パスワードが正しいか確認(なりすまし防止。アカウントの切り替えや
+      // ログイン状態には一切影響しない)
+      await verifyVaultPassword(pw);
+
+      let value;
+      let label;
+      if (backupPendingType === "privateKey") {
+        value = getPrivateKeyForAccount(backupPendingAccount);
+        label = `秘密鍵（${backupPendingAccount.label}）`;
+      } else {
+        // ニーモニックは保存されていないため、今のセッション中のものを
+        // 再導出して検証したうえでのみ返る(詳細はauth.js参照)
+        value = await getVerifiedMnemonicForAccount(backupPendingAccount);
+        label = `ニーモニック（${backupPendingAccount.label}）`;
+      }
+
+      document.getElementById("backup-password-input").value = "";
+      document.getElementById("backup-password-step").style.display = "none";
+      document.getElementById("backup-result-label").textContent = label;
+      document.getElementById("backup-result-value").value = value;
+      document.getElementById("backup-result").style.display = "block";
+      setStatus("backup-password-status", "", "default");
+    } catch (e) {
+      console.error("backup reveal error:", e);
+      setStatus("backup-password-status", e.message || "表示に失敗しました。", "error");
+    }
+  });
+
+  document.getElementById("backup-hide-result-btn")?.addEventListener("click", () => {
+    document.getElementById("backup-result-value").value = "";
+    document.getElementById("backup-result").style.display = "none";
+    backupPendingAccount = null;
+    backupPendingType = null;
+  });
+
+  document.getElementById("backup-copy-btn")?.addEventListener("click", async () => {
+    const value = document.getElementById("backup-result-value").value;
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      showPopup("コピーしました");
+    } catch (e) {
+      console.warn("clipboard error:", e);
+      setStatus("backup-password-status", "コピーに失敗しました。", "error");
+    }
   });
 
   document.getElementById("add-account-mnemonic-choice")?.addEventListener("click", () => {
