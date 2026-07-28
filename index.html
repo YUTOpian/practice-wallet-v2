@@ -337,12 +337,74 @@
         <button id="menu-add-privatekey" class="settings-menu-item">
           🔑 秘密鍵でアカウント追加
         </button>
+        <button id="menu-backup" class="settings-menu-item">
+          🗝️ バックアップ(ニーモニック・秘密鍵)
+        </button>
         <button id="lock-session-btn" class="settings-menu-item" style="display:none;">
           🔒 ログイン画面に戻る
         </button>
         <button id="logout-btn" class="settings-menu-item">
           🚪 ログアウト
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       バックアップ(ニーモニック・秘密鍵のエクスポート)
+  ============================================================ -->
+  <div id="backup-page" class="page">
+    <div class="card">
+      <h2>🗝️ バックアップ</h2>
+      <button id="back-settings-backup" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#f97316;margin-top:12px;">
+        ⚠️ ニーモニックと秘密鍵は、あなたの資産へのアクセスそのものです。
+        画面を覗き見されたり、表示中のスクリーンショットや画面共有が
+        残ったりしないよう、周囲に人がいない環境で操作してください。
+        表示した内容を他人に教えたり、画像として保存・送信したりしないでください。
+      </p>
+
+      <!-- パスワード未設定の場合の案内 -->
+      <div id="backup-no-password-notice" style="display:none;margin-top:16px;">
+        <p style="font-size:13px;color:#94a3b8;">
+          バックアップ機能を使うには、なりすまし防止のため先にパスワードを
+          設定する必要があります。
+        </p>
+        <button id="backup-goto-password-setup-btn" class="button-primary">パスワードを設定する</button>
+      </div>
+
+      <!-- アカウント選択 + 表示ボタン -->
+      <div id="backup-main" style="display:none;margin-top:16px;">
+        <label style="font-size:13px;color:#94a3b8;">表示するアカウント</label>
+        <select id="backup-account-select" class="input-box"></select>
+
+        <div style="display:flex;gap:10px;margin-top:10px;">
+          <button id="backup-request-privatekey-btn" class="button-primary" style="flex:1;">秘密鍵を表示</button>
+          <button id="backup-request-mnemonic-btn" class="button-primary" style="flex:1;">ニーモニックを表示</button>
+        </div>
+        <div id="backup-select-status" style="font-size:12px;margin-top:6px;"></div>
+      </div>
+
+      <!-- パスワード確認 -->
+      <div id="backup-password-step" style="display:none;margin-top:16px;">
+        <label style="font-size:13px;color:#94a3b8;">パスワードを入力してください</label>
+        <input id="backup-password-input" class="input-box" type="password" placeholder="パスワード">
+        <div style="display:flex;gap:10px;margin-top:10px;">
+          <button id="backup-password-cancel-btn" class="account-hide-btn" style="flex:1;">キャンセル</button>
+          <button id="backup-password-confirm-btn" class="button-primary" style="flex:1;">確認して表示</button>
+        </div>
+        <div id="backup-password-status" style="font-size:12px;margin-top:6px;"></div>
+      </div>
+
+      <!-- 表示結果 -->
+      <div id="backup-result" style="display:none;margin-top:16px;">
+        <label id="backup-result-label" style="font-size:13px;color:#94a3b8;"></label>
+        <textarea id="backup-result-value" class="input-box" readonly style="min-height:80px;word-break:break-all;"></textarea>
+        <div style="display:flex;gap:10px;margin-top:10px;">
+          <button id="backup-copy-btn" class="account-hide-btn" style="flex:1;">コピー</button>
+          <button id="backup-hide-result-btn" class="button-primary" style="flex:1;">隠す</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1454,7 +1516,10 @@
     <div class="confirm-tx-actions">
       <button id="confirm-tx-cancel-btn" class="account-hide-btn">キャンセル</button>
       <button id="confirm-tx-ok-btn" class="button-primary">確認してブロードキャスト</button>
+      <button id="confirm-tx-show-code-btn" class="account-hide-btn" style="display:none;">📖 コードを表示</button>
     </div>
+
+    <pre id="confirm-tx-code" style="display:none;"><code id="confirm-tx-code-content"></code></pre>
   </div>
 </dialog>
 
