@@ -218,7 +218,7 @@
       <div class="wallet-actions">
         <button id="receive-btn" class="button-primary">受け取り</button>
         <button id="send-btn" class="button-primary">送金</button>
-        <button id="harvest-btn" class="button-primary">ステーキング</button>
+        <button id="harvest-btn" class="button-primary">ハーベスト</button>
         <button id="advanced-btn" class="button-primary">高度機能</button>
       </div>
 
@@ -226,11 +226,11 @@
 
       <!-- タブ -->
       <div class="wallet-tabs">
-        <div id="tab-token" class="wallet-tab active">保有トークン</div>
+        <div id="tab-token" class="wallet-tab active">保有モザイク</div>
         <div id="tab-activity" class="wallet-tab">アクティビティ</div>
       </div>
 
-      <!-- 保有トークン -->
+      <!-- 保有モザイク -->
       <div id="token-content">
         <div id="mosaic-list">読み込み中...</div>
       </div>
@@ -247,9 +247,9 @@
   ============================================================ -->
   <div id="send-page" class="page">
     <div class="card">
-      <h2>トークン選択</h2>
+      <h2>モザイク選択</h2>
       <button id="back-account" class="button-primary">← 戻る</button>
-      <p>送りたいトークンを選択してください</p>
+      <p>送りたいモザイクを選択してください</p>
       <div id="send-mosaic-list"></div>
     </div>
   </div>
@@ -259,11 +259,11 @@
   ============================================================ -->
   <div id="transfer-page" class="page">
     <div class="card">
-      <h2>トークン送金</h2>
-      <button id="back-send" class="button-primary">← トークン選択へ戻る</button>
+      <h2>モザイク送金</h2>
+      <button id="back-send" class="button-primary">← モザイク選択へ戻る</button>
 
       <p>
-        <b>送信トークン：</b>
+        <b>送信モザイク：</b>
         <span id="selected-mosaic-name">未選択</span>
       </p>
       <p>
@@ -302,11 +302,11 @@
   </div>
 
   <!-- ============================================================
-       ステーキング画面
+       ハーベスト画面
   ============================================================ -->
   <div id="harvest-page" class="page">
     <div class="card">
-      <h2>ステーキング設定</h2>
+      <h2>ハーベスト設定</h2>
       <button id="back-account-harvest" class="button-primary">← 戻る</button>
 
       <p>アカウント:</p>
