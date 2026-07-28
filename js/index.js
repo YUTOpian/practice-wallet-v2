@@ -226,6 +226,7 @@ window.addEventListener("load", async () => {
     const mnemonicPhrase = document.getElementById("create-new-mnemonic").dataset.mnemonic;
     const networkChoice = document.getElementById("create-new-network-select").value;
     const networkType = networkChoice === "testnet" ? NetworkType.TESTNET : NetworkType.MAINNET;
+    const exportable = !!document.getElementById("create-new-exportable-toggle")?.checked;
 
     if (!mnemonicPhrase) {
       setStatus("create-new-status", "ニーモニックの生成が完了していません。", "error");
@@ -238,7 +239,7 @@ window.addEventListener("load", async () => {
 
     setStatus("create-new-status", "作成中...");
     try {
-      await loginWithMnemonic(mnemonicPhrase, networkType);
+      await loginWithMnemonic(mnemonicPhrase, networkType, 0, exportable);
       setStatus("create-new-status", "", "default");
       showPage(passwordSetupPage);
     } catch (e) {
@@ -260,6 +261,7 @@ window.addEventListener("load", async () => {
     const mnemonicPhrase = document.getElementById("mnemonic-input").value.trim();
     const networkChoice = document.getElementById("mnemonic-network-select").value;
     const networkType = networkChoice === "testnet" ? NetworkType.TESTNET : NetworkType.MAINNET;
+    const exportable = !!document.getElementById("mnemonic-import-exportable-toggle")?.checked;
 
     if (!mnemonicPhrase) {
       setStatus("mnemonic-import-status", "ニーモニックを入力してください。", "error");
@@ -268,7 +270,7 @@ window.addEventListener("load", async () => {
 
     setStatus("mnemonic-import-status", "インポート中...");
     try {
-      await loginWithMnemonic(mnemonicPhrase, networkType);
+      await loginWithMnemonic(mnemonicPhrase, networkType, 0, exportable);
       document.getElementById("mnemonic-input").value = "";
       setStatus("mnemonic-import-status", "", "default");
       showPage(passwordSetupPage);
@@ -1772,6 +1774,12 @@ window.addEventListener("load", async () => {
     const networkSwitchItem = document.getElementById("menu-network-switch");
     if (networkSwitchItem) networkSwitchItem.style.display = isSss ? "none" : "";
 
+    // SSS Extension由来のアカウントは、そもそも秘密鍵・ニーモニックを
+    // このアプリが一切扱わない(扱えない)ため、バックアップ機能自体を
+    // メニューから隠す
+    const backupItem = document.getElementById("menu-backup");
+    if (backupItem) backupItem.style.display = isSss ? "none" : "";
+
     showPage(settingsPage);
   });
 
@@ -1923,7 +1931,12 @@ window.addEventListener("load", async () => {
     }
     select.innerHTML = candidates
       .map((a) => {
-        const sourceLabel = a.source === "mnemonic" ? "ニーモニック由来" : "秘密鍵インポート";
+        let sourceLabel;
+        if (a.source === "mnemonic") {
+          sourceLabel = a.mnemonicPhrase ? "ニーモニック由来・取り出し可" : "ニーモニック由来・取り出し不可(このセッションのみ)";
+        } else {
+          sourceLabel = "秘密鍵インポート";
+        }
         return `<option value="${a.id}">${a.label}（${sourceLabel}）</option>`;
       })
       .join("");

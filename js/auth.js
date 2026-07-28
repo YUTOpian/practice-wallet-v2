@@ -147,25 +147,32 @@ export function getPrivateKeyForAccount(account) {
 }
 
 /*
-  ニーモニックの取得。上記の制約により、以下の両方を満たす場合のみ
-  返すことができる:
-    ① このアカウントが mnemonic 由来である
-    ② 今のセッション中に入力されたニーモニック(currentMnemonicPhrase)が
-       残っており、かつ再導出した結果がこのアカウントの privateKeyHex と
-       一致する(＝取り違えでないことを確認できる)
-  いずれかを満たさない場合は、理由を含むエラーを投げる。
+  ニーモニックの取得。以下のいずれかを満たす場合のみ返すことができる:
+    ① このアカウントが「取り出せるモード」(exportable: true)で作成されて
+       おり、account.mnemonicPhrase が保存されている
+       → 再起動後・別セッションでも常に取得できる
+    ② 「取り出せないモード」の場合、今のセッション中にメモリへ残っている
+       もの(currentMnemonicPhrase)だけが対象。再導出して一致を検証する
+  いずれも満たさない場合は、理由を含むエラーを投げる。
 */
 export async function getVerifiedMnemonicForAccount(account) {
   if (!account || account.source !== "mnemonic") {
     throw new Error("このアカウントはニーモニック由来ではないため、ニーモニックは存在しません(秘密鍵のみインポートされたアカウントです)。");
   }
+
+  // ① 「取り出せるモード」で作成済み → 保存されているものをそのまま返す
+  if (account.mnemonicPhrase) {
+    return account.mnemonicPhrase;
+  }
+
+  // ② 「取り出せないモード」 → 今のセッションのメモリ上にあるものだけが対象
   if (!currentMnemonicPhrase) {
     throw new Error(
-      "ニーモニックはこの端末に保存されていません。今のセッション中にログインまたは" +
-      "アカウント追加の際に入力したものだけが一時的にメモリ上に残る仕組みのため、" +
-      "ページを再読み込みすると失われ、二度と復元できません。表示するには、" +
-      "このアカウントの作成に使ったニーモニックを使って、もう一度ログインし直して" +
-      "から改めてお試しください。"
+      "このアカウントは「取り出せないモード」で作成されているため、ニーモニックは保存されていません。" +
+      "今のセッション中にログインまたはアカウント追加の際に入力したものだけが一時的にメモリ上に残る" +
+      "仕組みのため、ページを再読み込みすると失われ、二度と復元できません。表示するには、" +
+      "このアカウントの作成に使ったニーモニックを使って、もう一度ログインし直してから" +
+      "改めてお試しください。"
     );
   }
 
@@ -335,10 +342,19 @@ export async function connectWithSSS() {
   await switchToAccount(id);
 }
 
-/* ============================================================
-   ニーモニックでログイン（初回ログイン用。デフォルトでアカウント0を使う）
-============================================================ */
-export async function loginWithMnemonic(mnemonicPhrase, networkType, accountIndex = 0) {
+/*
+  ニーモニックでログイン（初回ログイン用。デフォルトでアカウント0を使う）
+
+  exportable:
+    true  … 「取り出せるモード」。ニーモニック自体をこのアカウントの
+             エントリに保存する(vaultの暗号化対象に含まれるため、
+             パスワードが正しければ後からいつでも「バックアップ」画面
+             から取り出せる)。
+    false … 「取り出せないモード」(デフォルト、より安全)。ニーモニック
+             は一切保存せず、今のセッション中のみメモリに残る
+             (currentMnemonicPhrase)。ページ再読み込み後は復元できない。
+*/
+export async function loginWithMnemonic(mnemonicPhrase, networkType, accountIndex = 0, exportable = false) {
   const privateKeyHex = await deriveFromMnemonic(mnemonicPhrase, accountIndex);
   currentMnemonicPhrase = mnemonicPhrase;
 
@@ -352,6 +368,7 @@ export async function loginWithMnemonic(mnemonicPhrase, networkType, accountInde
     privateKeyHex,
     accountIndex,
     hidden: false,
+    ...(exportable ? { mnemonicPhrase } : {}),
   });
 
   await switchToAccount(id);
