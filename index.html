@@ -6,6 +6,7 @@
   <title>Symbol Simple Wallet</title>
   <link rel="stylesheet" href="css/base.css" />
   <link rel="stylesheet" href="css/wallet.css" />
+  <link rel="stylesheet" href="css/tomato-theme.css" />
 </head>
 <body>
 
@@ -35,6 +36,9 @@
         <button id="choose-mnemonic" class="settings-menu-item">
           📝 ニーモニックをインポートする
         </button>
+        <button id="choose-privatekey" class="settings-menu-item">
+          🔑 秘密鍵をインポートする
+        </button>
         <button id="choose-sss" class="settings-menu-item">
           🧩 SSS Extensionと接続する
         </button>
@@ -45,9 +49,36 @@
       <hr>
 
       <p style="font-size:13px;color:#94a3b8;">
+        秘密鍵を入力せず、Symbolアドレスを指定して残高・アクティビティなどを閲覧だけしたい場合はこちら（ログイン不要・送金不可）。
+      </p>
+      <button id="welcome-address-lookup-btn" class="button-primary">🔍 アドレスを照会する（閲覧のみ）</button>
+
+      <hr>
+
+      <p style="font-size:13px;color:#94a3b8;">
         オフラインで署名済みのトランザクションファイルをお持ちの場合は、こちらから読み込んでブロードキャストできます（ログイン不要）。
       </p>
       <button id="welcome-offline-broadcast-btn" class="button-primary">📥 オフライン署名データを読み込む</button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       アドレス照会(閲覧専用・秘密鍵不要)
+  ============================================================ -->
+  <div id="address-lookup-page" class="page">
+    <div class="card">
+      <h2>アドレスを照会</h2>
+      <button id="back-welcome-address-lookup" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        Symbolアドレスを入力すると、そのアドレスの残高やアクティビティなどを閲覧できます。
+        秘密鍵は一切扱わないため、送金など署名を伴う操作はできません。
+      </p>
+
+      <input id="address-lookup-input" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX">
+
+      <button id="address-lookup-submit-btn" class="button-primary">照会する</button>
+      <div id="address-lookup-status"></div>
     </div>
   </div>
 
@@ -66,7 +97,8 @@
         他人に知られるとアカウントの資産を自由に操作されてしまいます。
       </p>
 
-      <div id="create-new-mnemonic" class="input-box" style="word-break:break-all; user-select: text;">生成中...</div>
+      <div id="create-new-mnemonic" class="mnemonic-grid" style="user-select: text;">生成中...</div>
+      <button id="create-new-mnemonic-copy-btn" class="account-hide-btn" type="button">📋 ニーモニックをコピー</button>
 
       <div style="margin-top:12px;">
         <label style="font-size:13px;color:#e5e7eb;display:flex;align-items:flex-start;gap:8px;">
@@ -80,6 +112,10 @@
           二度と表示できなくなります(より安全。秘密鍵のバックアップは引き続き可能です)。
         </p>
       </div>
+
+      <p><b>秘密鍵（アカウント番号 0）：</b></p>
+      <div id="create-new-privatekey" class="input-box" style="word-break:break-all; user-select: text; font-family: monospace; font-size: 12.5px;">生成中...</div>
+      <button id="create-new-privatekey-copy-btn" class="account-hide-btn" type="button">📋 秘密鍵をコピー</button>
 
       <p><b>ネットワーク：</b></p>
       <select id="create-new-network-select" class="input-box">
@@ -104,7 +140,10 @@
         12語または24語のニーモニックフレーズを入力してください。この端末以外には送信されません。
       </p>
 
-      <textarea id="mnemonic-input" class="input-box" placeholder="単語をスペース区切りで入力"></textarea>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:4px;">
+        フレーズ全体をどこか1マスに貼り付けると、自動ですべてのマスに割り振られます。
+      </p>
+      <div id="mnemonic-input-grid" class="mnemonic-input-grid"></div>
 
       <div style="margin-top:12px;">
         <label style="font-size:13px;color:#e5e7eb;display:flex;align-items:flex-start;gap:8px;">
@@ -126,6 +165,31 @@
 
       <button id="import-mnemonic-btn" class="button-primary">インポートする</button>
       <div id="mnemonic-import-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       秘密鍵インポート画面
+  ============================================================ -->
+  <div id="privatekey-import-page" class="page">
+    <div class="card">
+      <h2>秘密鍵のインポート</h2>
+      <button id="back-welcome-privatekey" class="button-primary">← 戻る</button>
+
+      <p style="font-size:13px;color:#94a3b8;">
+        64桁の秘密鍵(16進数)を入力してください。この端末以外には送信されません。
+      </p>
+
+      <input id="privatekey-import-input" class="input-box" placeholder="秘密鍵（64桁の16進数）">
+
+      <p><b>ネットワーク：</b></p>
+      <select id="privatekey-import-network-select" class="input-box">
+        <option value="mainnet">Mainnet</option>
+        <option value="testnet">Testnet</option>
+      </select>
+
+      <button id="import-privatekey-btn" class="button-primary">インポートする</button>
+      <div id="privatekey-import-status"></div>
     </div>
   </div>
 
@@ -180,6 +244,13 @@
       <hr>
 
       <p style="font-size:13px;color:#94a3b8;">
+        秘密鍵を入力せず、Symbolアドレスを指定して残高・アクティビティなどを閲覧だけしたい場合はこちら（ログイン不要・送金不可）。
+      </p>
+      <button id="unlock-address-lookup-btn" class="button-primary">🔍 アドレスを照会する（閲覧のみ）</button>
+
+      <hr>
+
+      <p style="font-size:13px;color:#94a3b8;">
         オフラインで署名済みのトランザクションファイルをお持ちの場合は、こちらから読み込んでブロードキャストできます（ログイン不要）。
       </p>
       <button id="unlock-offline-broadcast-btn" class="button-primary">📥 オフライン署名データを読み込む</button>
@@ -207,8 +278,8 @@
       <p><b>アドレス：</b></p>
       <div class="address-row">
         <span id="account-address" class="address-text">---</span>
+        <button id="copy-address-btn" class="copy-btn">🗒️</button>
       </div>
-      <button id="copy-address-btn" class="copy-btn">🗒️</button>
 
       <p>
         <b>残高：</b>
@@ -218,8 +289,8 @@
       <div class="wallet-actions">
         <button id="receive-btn" class="button-primary">受け取り</button>
         <button id="send-btn" class="button-primary">送金</button>
-        <button id="harvest-btn" class="button-primary">ハーベスト</button>
         <button id="advanced-btn" class="button-primary">高度機能</button>
+        <button id="data-btn" class="button-primary">📊 データ</button>
       </div>
 
       <hr>
@@ -228,6 +299,7 @@
       <div class="wallet-tabs">
         <div id="tab-token" class="wallet-tab active">保有モザイク</div>
         <div id="tab-activity" class="wallet-tab">アクティビティ</div>
+        <div id="tab-harvest-reward" class="wallet-tab">ハーベスト報酬</div>
       </div>
 
       <!-- 保有モザイク -->
@@ -238,6 +310,11 @@
       <!-- アクティビティ -->
       <div id="activity-content" style="display:none;">
         <div id="tx-list">読み込み中...</div>
+      </div>
+
+      <!-- ハーベスト報酬 -->
+      <div id="harvest-reward-content" style="display:none;">
+        <div id="harvest-reward-list">読み込み中...</div>
       </div>
     </div>
   </div>
@@ -273,6 +350,7 @@
 
       <input type="hidden" id="selected-mosaic-id">
       <input id="tx-recipient" class="input-box" placeholder="宛先アドレス">
+      <div id="recipient-info-box" class="recipient-info-box"></div>
       <input id="tx-amount" class="input-box" type="number" placeholder="数量">
       <textarea id="tx-message" class="input-box" placeholder="メッセージ（任意）"></textarea>
 
@@ -285,6 +363,7 @@
 
       <button id="btn-transfer" class="button-primary">送金する</button>
       <div id="tx-status"></div>
+      <div id="tx-tracking" class="tx-tracking"></div>
     </div>
   </div>
 
@@ -295,7 +374,22 @@
     <div class="card">
       <h2>受け取り</h2>
       <button id="back-account-receive" class="button-primary">← 戻る</button>
-      <div id="receive-qrcode"></div>
+
+      <div class="receive-qr-columns">
+        <div class="receive-qr-column">
+          <div class="receive-qr-label">Symbol Wallet</div>
+          <div id="receive-qrcode-symbol"></div>
+        </div>
+        <div class="receive-qr-column">
+          <div class="receive-qr-label">EXYM Wallet</div>
+          <div id="receive-qrcode-exym"></div>
+        </div>
+        <div class="receive-qr-column">
+          <div class="receive-qr-label">NFTDriveEX</div>
+          <div id="receive-qrcode-nftdriveex"></div>
+        </div>
+      </div>
+
       <p id="receive-address" class="address-text"></p>
       <button id="copy-receive-address" class="button-primary">アドレスをコピー</button>
     </div>
@@ -335,6 +429,7 @@
       <button id="start-harvest-btn" class="button-primary">開始</button>
       <button id="stop-harvest-btn" class="button-primary">停止</button>
       <div id="harvest-status">状態確認中...</div>
+      <div id="harvest-tracking" class="tx-tracking"></div>
     </div>
   </div>
 
@@ -427,7 +522,7 @@
         <label id="backup-result-label" style="font-size:13px;color:#94a3b8;"></label>
         <textarea id="backup-result-value" class="input-box" readonly style="min-height:80px;word-break:break-all;"></textarea>
         <div style="display:flex;gap:10px;margin-top:10px;">
-          <button id="backup-copy-btn" class="account-hide-btn" style="flex:1;">コピー</button>
+          <button id="backup-copy-btn" class="account-hide-btn" style="flex:1;">📋 コピー</button>
           <button id="backup-hide-result-btn" class="button-primary" style="flex:1;">隠す</button>
         </div>
       </div>
@@ -577,7 +672,10 @@
       <h2>ニーモニックでアカウント追加</h2>
       <button id="back-add-account-mnemonic" class="button-primary">← 戻る</button>
 
-      <textarea id="add-mnemonic-input" class="input-box" placeholder="単語をスペース区切りで入力"></textarea>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:4px;">
+        フレーズ全体をどこか1マスに貼り付けると、自動ですべてのマスに割り振られます。
+      </p>
+      <div id="add-mnemonic-input-grid" class="mnemonic-input-grid"></div>
 
       <p><b>アカウントインデックス：</b></p>
       <input id="add-mnemonic-index" class="input-box" type="number" min="0" value="0">
@@ -609,6 +707,49 @@
   </div>
 
   <!-- ============================================================
+       データ(アカウント詳細 / Symbolネットワーク統計)
+  ============================================================ -->
+  <div id="data-page" class="page">
+    <div class="card">
+      <h2>データ</h2>
+      <button id="back-account-data" class="button-primary">← 戻る</button>
+
+      <h3>アカウントに関して</h3>
+      <div class="data-row"><span class="data-label">接続ネットワーク</span><span id="data-account-network" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">アカウントの接続先ノード</span><span id="data-account-node" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">重要度</span><span id="data-account-importance" class="data-value">---</span></div>
+      <div class="data-row-block">
+        <span class="data-label">保有ルートネームスペース</span>
+        <div id="data-account-namespaces" class="data-value">読み込み中...</div>
+      </div>
+
+      <hr>
+
+      <h3>Symbolについて</h3>
+      <div class="data-row"><span class="data-label">最新ブロック高</span><span id="data-chain-height" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">ファイナライズ済み高</span><span id="data-chain-finalized-height" class="data-value">---</span></div>
+
+      <h4>手数料相場</h4>
+      <div class="data-row"><span class="data-label">送金（中央値）</span><span id="data-fee-transfer-median" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">ネームスペース（年）</span><span id="data-fee-namespace-year" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">子ネームスペースレンタル手数料</span><span id="data-fee-sub-namespace" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">モザイクレンタル手数料</span><span id="data-fee-mosaic-rental" class="data-value">---</span></div>
+
+      <h4>ノード情報</h4>
+      <div class="data-row"><span class="data-label">合計</span><span id="data-nodes-total" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">Peerノード数</span><span id="data-nodes-peer" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">Apiノード数</span><span id="data-nodes-api" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">Peer Apiノード数</span><span id="data-nodes-peer-api" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">Votingノード数</span><span id="data-nodes-voting" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">Peer Votingノード数</span><span id="data-nodes-peer-voting" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">Api Votingノード数</span><span id="data-nodes-api-voting" class="data-value">---</span></div>
+      <div class="data-row"><span class="data-label">Peer Api Votingノード数</span><span id="data-nodes-peer-api-voting" class="data-value">---</span></div>
+
+      <div id="data-page-status"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================
        高度機能メニュー
   ============================================================ -->
   <div id="advanced-page" class="page">
@@ -617,6 +758,9 @@
       <button id="back-account-advanced" class="button-primary">← 戻る</button>
 
       <div class="settings-menu">
+        <button id="menu-harvest" class="settings-menu-item">
+          🌾 ハーベスト
+        </button>
         <button id="menu-namespace" class="settings-menu-item">
           🏷️ ネームスペース
         </button>
@@ -704,6 +848,7 @@
         <p style="font-size:13px;color:#94a3b8;">推定レンタル手数料: <span id="sub-namespace-rental-fee-estimate">---</span></p>
         <button id="register-sub-namespace-btn" class="button-primary">サブネームスペースを登録</button>
         <div id="sub-namespace-status"></div>
+        <div id="namespace-tracking" class="tx-tracking"></div>
       </div>
 
       <!-- リンクと解除 -->
@@ -825,6 +970,7 @@
 
         <button id="create-mosaic-btn" class="button-primary">モザイクを作成する</button>
         <div id="mosaic-create-status"></div>
+        <div id="mosaic-tracking" class="tx-tracking"></div>
       </div>
 
       <!-- 供給量変更設定 -->
@@ -913,154 +1059,92 @@
 
         <button id="submit-metadata-btn" class="button-primary">登録・更新する</button>
         <div id="metadata-status"></div>
+        <div id="metadata-tracking" class="tx-tracking"></div>
       </div>
     </div>
   </div>
 
   <!-- ============================================================
-       マルチシグメニュー
+       マルチシグ(送金・署名・設定をタブで切り替え)
   ============================================================ -->
-  <div id="multisig-menu-page" class="page">
+  <div id="multisig-page" class="page">
     <div class="card">
       <h2>マルチシグ</h2>
       <button id="back-advanced-multisig-menu" class="button-primary">← 戻る</button>
 
-      <div class="settings-menu">
-        <button id="menu-multisig-send" class="settings-menu-item">
-          💸 マルチシグ送金
-        </button>
-        <button id="menu-multisig-sign" class="settings-menu-item">
-          ✍️ マルチシグ署名
-        </button>
-        <button id="menu-multisig-settings" class="settings-menu-item">
-          ⚙️ マルチシグ設定
-        </button>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-multisig-tab="send">💸 送金</button>
+        <button class="tab-btn" data-multisig-tab="sign">✍️ 署名</button>
+        <button class="tab-btn" data-multisig-tab="settings">⚙️ 設定</button>
       </div>
-    </div>
-  </div>
 
-  <!-- ============================================================
-       マルチシグ設定
-  ============================================================ -->
-  <div id="multisig-settings-page" class="page">
-    <div class="card">
-      <h2>マルチシグ設定</h2>
-      <button id="back-multisig-menu-settings" class="button-primary">← 戻る</button>
+      <!-- ----- 送金タブ ----- -->
+      <div class="tab-panel" data-multisig-panel="send">
+        <p style="font-size:13px;color:#94a3b8;">
+          自分が連署者になっているマルチシグアカウントから送金を提案します
+          （提案時に10XYMのハッシュロック担保が一時的に必要です。必要な承認数に応じて、
+          他の連署者が「署名」タブから承認するまで確定しません）。
+        </p>
 
-      <p style="font-size:13px;color:#94a3b8;">
-        設定対象は、今ログイン中のアカウント自身です。追加する連署者の同意（署名）が必要なため、
-        提案後は各連署者がそれぞれ「マルチシグ署名」画面から承認する必要があります
-        （提案時に10XYMのハッシュロック担保が一時的に必要です）。
-      </p>
+        <p><b>送金元マルチシグアカウント：</b></p>
+        <select id="multisig-send-from-select" class="input-box">
+          <option value="">-- 読み込み中... --</option>
+        </select>
 
-      <h3>現在の状態</h3>
-      <div id="multisig-info">読み込み中...</div>
+        <p><b>宛先アドレス：</b></p>
+        <input id="multisig-send-recipient" class="input-box" placeholder="宛先アドレス">
 
-      <hr>
+        <p><b>送金額（XYM）：</b></p>
+        <input id="multisig-send-amount" class="input-box" type="number" min="0" step="any" value="0">
 
-      <h3>変更内容</h3>
+        <p><b>メッセージ（任意）：</b></p>
+        <textarea id="multisig-send-message" class="input-box" placeholder="メッセージ"></textarea>
 
-      <p><b>追加する連署者アドレス（1行に1つ）：</b></p>
-      <textarea id="multisig-add-addresses" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
-
-      <p><b>削除する連署者アドレス（1行に1つ）：</b></p>
-      <textarea id="multisig-remove-addresses" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
-
-      <p><b>最小承認者数の増減（minApprovalDelta）：</b></p>
-      <input id="multisig-min-approval-delta" class="input-box" type="number" value="0">
-
-      <p><b>最小削除承認者数の増減（minRemovalDelta）：</b></p>
-      <input id="multisig-min-removal-delta" class="input-box" type="number" value="0">
-
-      <button id="submit-multisig-settings-btn" class="button-primary">この内容で提案する</button>
-      <div id="multisig-settings-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       マルチシグ送金
-  ============================================================ -->
-  <div id="multisig-send-page" class="page">
-    <div class="card">
-      <h2>マルチシグ送金</h2>
-      <button id="back-multisig-menu-send" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        自分が連署者になっているマルチシグアカウントから送金を提案します
-        （提案時に10XYMのハッシュロック担保が一時的に必要です。必要な承認数に応じて、
-        他の連署者が「マルチシグ署名」から承認するまで確定しません）。
-      </p>
-
-      <p><b>送金元マルチシグアカウント：</b></p>
-      <select id="multisig-send-from-select" class="input-box">
-        <option value="">-- 読み込み中... --</option>
-      </select>
-
-      <p><b>宛先アドレス：</b></p>
-      <input id="multisig-send-recipient" class="input-box" placeholder="宛先アドレス">
-
-      <p><b>送金額（XYM）：</b></p>
-      <input id="multisig-send-amount" class="input-box" type="number" min="0" step="any" value="0">
-
-      <p><b>メッセージ（任意）：</b></p>
-      <textarea id="multisig-send-message" class="input-box" placeholder="メッセージ"></textarea>
-
-      <button id="submit-multisig-send-btn" class="button-primary">この内容で提案する</button>
-      <div id="multisig-send-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       マルチシグ署名
-  ============================================================ -->
-  <div id="multisig-sign-page" class="page">
-    <div class="card">
-      <h2>マルチシグ署名</h2>
-      <button id="back-multisig-menu-sign" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        自分の連署が必要な、保留中のトランザクション一覧です。
-        ※ SSS Extensionログイン中は連署に対応していません（ニーモニック/秘密鍵ログインでご利用ください）。
-      </p>
-
-      <div id="multisig-pending-list">読み込み中...</div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       複数送信メニュー
-  ============================================================ -->
-  <div id="multisend-menu-page" class="page">
-    <div class="card">
-      <h2>複数送信</h2>
-      <button id="back-advanced-multisend-menu" class="button-primary">← 戻る</button>
-
-      <div class="settings-menu">
-        <button id="menu-multisend-manual" class="settings-menu-item">
-          ✏️ 手動設定
-        </button>
-        <button id="menu-multisend-csv" class="settings-menu-item">
-          📄 CSVインポート
-        </button>
+        <button id="submit-multisig-send-btn" class="button-primary">この内容で提案する</button>
+        <div id="multisig-send-status"></div>
       </div>
-    </div>
-  </div>
 
-  <!-- ============================================================
-       複数送信 CSVインポート
-  ============================================================ -->
-  <div id="multisend-csv-page" class="page">
-    <div class="card">
-      <h2>CSVインポート</h2>
-      <button id="back-multisend-menu-csv" class="button-primary">← 戻る</button>
+      <!-- ----- 署名タブ ----- -->
+      <div class="tab-panel" data-multisig-panel="sign" style="display:none;">
+        <p style="font-size:13px;color:#94a3b8;">
+          自分の連署が必要な、保留中のトランザクション一覧です。
+          ※ SSS Extensionログイン中は連署に対応していません（ニーモニック/秘密鍵ログインでご利用ください）。
+        </p>
 
-      <p style="font-size:13px;color:#94a3b8;">
-        1行目はヘッダー行として「address,mosaic,amount,message」を想定しています。
-        mosaicはモザイクID(16進)、またはネームスペース名（例: symbol.xym）どちらでも入力できます。
-      </p>
+        <div id="multisig-pending-list">読み込み中...</div>
+      </div>
 
-      <input id="multisend-csv-file" class="input-box" type="file" accept=".csv,text/csv">
-      <div id="multisend-csv-status"></div>
+      <!-- ----- 設定タブ ----- -->
+      <div class="tab-panel" data-multisig-panel="settings" style="display:none;">
+        <p style="font-size:13px;color:#94a3b8;">
+          設定対象は、今ログイン中のアカウント自身です。追加する連署者の同意（署名）が必要なため、
+          提案後は各連署者がそれぞれ「署名」タブから承認する必要があります
+          （提案時に10XYMのハッシュロック担保が一時的に必要です）。
+        </p>
+
+        <h3>現在の状態</h3>
+        <div id="multisig-info">読み込み中...</div>
+
+        <hr>
+
+        <h3>変更内容</h3>
+
+        <p><b>追加する連署者アドレス（1行に1つ）：</b></p>
+        <textarea id="multisig-add-addresses" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+
+        <p><b>削除する連署者アドレス（1行に1つ）：</b></p>
+        <textarea id="multisig-remove-addresses" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+
+        <p><b>最小承認者数の増減（minApprovalDelta）：</b></p>
+        <input id="multisig-min-approval-delta" class="input-box" type="number" value="0">
+
+        <p><b>最小削除承認者数の増減（minRemovalDelta）：</b></p>
+        <input id="multisig-min-removal-delta" class="input-box" type="number" value="0">
+
+        <button id="submit-multisig-settings-btn" class="button-primary">この内容で提案する</button>
+        <div id="multisig-settings-status"></div>
+        <div id="multisig-settings-tracking" class="tx-tracking"></div>
+      </div>
     </div>
   </div>
 
@@ -1069,21 +1153,33 @@
   ============================================================ -->
   <div id="multisend-list-page" class="page">
     <div class="card">
-      <h2>複数送信リスト</h2>
+      <div class="card-title-row">
+        <h2>複数送信リスト</h2>
+        <button id="multisend-csv-btn" class="account-hide-btn">📄 CSVインポート</button>
+      </div>
       <button id="back-multisend-menu-list" class="button-primary">← 戻る</button>
+
+      <input id="multisend-csv-file" class="input-box" type="file" accept=".csv,text/csv" style="display:none;">
+      <p style="font-size:12px;color:#94a3b8;">
+        CSVは1行目をヘッダー行「address,mosaic,amount,message」として想定しています。
+        mosaicはモザイクID(16進)、またはネームスペース名（例: symbol.xym）どちらでも入力できます。
+      </p>
+      <div id="multisend-csv-status"></div>
 
       <div id="multisend-rows"></div>
 
       <button id="multisend-add-row-btn" class="button-primary">＋ 行を追加</button>
+      <button id="multisend-check-btn" class="account-hide-btn">🔎 宛先をまとめて確認</button>
       <button id="multisend-submit-btn" class="button-primary">この内容で送信する</button>
       <div id="multisend-status"></div>
+      <div id="multisend-tracking" class="tx-tracking"></div>
     </div>
   </div>
 
   <!-- ============================================================
-       アポスティーユメニュー
+       アポスティーユ(作成・監査・承認・履歴をタブで切り替え)
   ============================================================ -->
-  <div id="apostille-menu-page" class="page">
+  <div id="apostille-page" class="page">
     <div class="card">
       <h2>アポスティーユ</h2>
       <button id="back-advanced-apostille-menu" class="button-primary">← 戻る</button>
@@ -1092,92 +1188,66 @@
         ファイルのハッシュ値をブロックチェーン上に記録して、存在証明・改ざん検知を行う機能です。
       </p>
 
-      <div class="settings-menu">
-        <button id="menu-apostille-create" class="settings-menu-item">
-          🆕 作成
-        </button>
-        <button id="menu-apostille-verify" class="settings-menu-item">
-          🔍 監査・承認
-        </button>
-        <button id="menu-apostille-history" class="settings-menu-item">
-          🕒 履歴
-        </button>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-apostille-tab="create">🆕 作成</button>
+        <button class="tab-btn" data-apostille-tab="verify">🔍 監査・承認</button>
+        <button class="tab-btn" data-apostille-tab="history">🕒 履歴</button>
       </div>
-    </div>
-  </div>
 
-  <!-- ============================================================
-       アポスティーユ作成
-  ============================================================ -->
-  <div id="apostille-create-page" class="page">
-    <div class="card">
-      <h2>アポスティーユ作成</h2>
-      <button id="back-apostille-menu-create" class="button-primary">← 戻る</button>
+      <!-- ----- 作成タブ ----- -->
+      <div class="tab-panel" data-apostille-panel="create">
+        <p><b>アポスティーユファイル選択：</b></p>
+        <input id="apostille-create-file" class="input-box" type="file">
+        <div id="apostille-create-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
 
-      <p><b>アポスティーユファイル選択：</b></p>
-      <input id="apostille-create-file" class="input-box" type="file">
-      <div id="apostille-create-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
+        <p><b>所有者(承認者)割り当て（任意）：</b></p>
+        <input id="apostille-owner-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
 
-      <p><b>所有者(承認者)割り当て（任意）：</b></p>
-      <input id="apostille-owner-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
+        <p><b>メタデータ追加（任意）：</b></p>
+        <input id="apostille-metadata-key" class="input-box" placeholder="メタデータキー">
+        <input id="apostille-metadata-value" class="input-box" placeholder="値（空欄ならファイルハッシュを使用）">
 
-      <p><b>メタデータ追加（任意）：</b></p>
-      <input id="apostille-metadata-key" class="input-box" placeholder="メタデータキー">
-      <input id="apostille-metadata-value" class="input-box" placeholder="値（空欄ならファイルハッシュを使用）">
+        <button id="apostille-create-btn" class="button-primary">アポスティーユ作成</button>
+        <div id="apostille-create-status"></div>
+        <div id="apostille-tracking" class="tx-tracking"></div>
+      </div>
 
-      <button id="apostille-create-btn" class="button-primary">アポスティーユ作成</button>
-      <div id="apostille-create-status"></div>
-    </div>
-  </div>
+      <!-- ----- 監査・承認タブ ----- -->
+      <div class="tab-panel" data-apostille-panel="verify" style="display:none;">
+        <p style="font-size:13px;color:#94a3b8;">
+          監査したいファイルをアップロードすると、対象アドレスの取引履歴から一致する証明トランザクションを検索します
+          （直近の取引のみが検索対象です）。
+        </p>
 
-  <!-- ============================================================
-       アポスティーユ 監査・承認
-  ============================================================ -->
-  <div id="apostille-verify-page" class="page">
-    <div class="card">
-      <h2>監査・承認</h2>
-      <button id="back-apostille-menu-verify" class="button-primary">← 戻る</button>
+        <p><b>監査するファイル：</b></p>
+        <input id="apostille-verify-file" class="input-box" type="file">
+        <div id="apostille-verify-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
 
-      <p style="font-size:13px;color:#94a3b8;">
-        監査したいファイルをアップロードすると、対象アドレスの取引履歴から一致する証明トランザクションを検索します
-        （直近の取引のみが検索対象です）。
-      </p>
+        <p><b>検索対象アドレス（任意）：</b></p>
+        <input id="apostille-verify-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
 
-      <p><b>監査するファイル：</b></p>
-      <input id="apostille-verify-file" class="input-box" type="file">
-      <div id="apostille-verify-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
+        <button id="apostille-verify-btn" class="button-primary">検証する</button>
+        <div id="apostille-verify-status"></div>
+        <div id="apostille-verify-result"></div>
+      </div>
 
-      <p><b>検索対象アドレス（任意）：</b></p>
-      <input id="apostille-verify-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
+      <!-- ----- 履歴タブ ----- -->
+      <div class="tab-panel" data-apostille-panel="history" style="display:none;">
+        <p style="font-size:13px;color:#94a3b8;">
+          ファイルをアップロードすると、そのファイル(ハッシュ)に関する証明トランザクションの変遷を古い順に表示します。
+        </p>
 
-      <button id="apostille-verify-btn" class="button-primary">検証する</button>
-      <div id="apostille-verify-status"></div>
-      <div id="apostille-verify-result"></div>
-    </div>
-  </div>
+        <p><b>ファイル：</b></p>
+        <input id="apostille-history-file" class="input-box" type="file">
+        <div id="apostille-history-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
 
-  <!-- ============================================================
-       アポスティーユ 履歴
-  ============================================================ -->
-  <div id="apostille-history-page" class="page">
-    <div class="card">
-      <h2>履歴</h2>
-      <button id="back-apostille-menu-history" class="button-primary">← 戻る</button>
+        <p><b>検索対象アドレス（任意）：</b></p>
+        <input id="apostille-history-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
 
-      <p style="font-size:13px;color:#94a3b8;">
-        ファイルをアップロードすると、そのファイル(ハッシュ)に関する証明トランザクションの変遷を古い順に表示します。
-      </p>
-
-      <p><b>ファイル：</b></p>
-      <input id="apostille-history-file" class="input-box" type="file">
-      <div id="apostille-history-hash" style="font-size:12px;color:#94a3b8;word-break:break-all;"></div>
-
-      <p><b>検索対象アドレス（任意）：</b></p>
-      <input id="apostille-history-address" class="input-box" placeholder="空欄なら自分自身のアドレス">
-
-      <button id="apostille-history-btn" class="button-primary">履歴を検索</button>
-      <div id="apostille-history-status"></div>
-      <div id="apostille-history-list"></div>
+        <button id="apostille-history-btn" class="button-primary">履歴を検索</button>
+        <div id="apostille-history-status"></div>
+        <div id="apostille-history-list"></div>
+      </div>
     </div>
   </div>
 
@@ -1205,9 +1275,9 @@
   </div>
 
   <!-- ============================================================
-       アカウント制限サブメニュー
+       アカウント制限(アドレス / モザイク / 操作をタブで切り替え)
   ============================================================ -->
-  <div id="restriction-account-menu-page" class="page">
+  <div id="restriction-account-page" class="page">
     <div class="card">
       <h2>アカウント制限</h2>
       <button id="back-restriction-menu-account" class="button-primary">← 戻る</button>
@@ -1216,24 +1286,104 @@
         今ログイン中のアカウント自身に対する制限です。自分の署名だけで設定できます。
       </p>
 
-      <div class="settings-menu">
-        <button id="menu-restriction-address" class="settings-menu-item">
-          📍 アカウントアドレス制限
-        </button>
-        <button id="menu-restriction-mosaic" class="settings-menu-item">
-          🪙 アカウントモザイク制限
-        </button>
-        <button id="menu-restriction-operation" class="settings-menu-item">
-          📄 アカウント操作制限
-        </button>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-restriction-account-tab="address">📍 アドレス</button>
+        <button class="tab-btn" data-restriction-account-tab="mosaic">🪙 モザイク</button>
+        <button class="tab-btn" data-restriction-account-tab="operation">📄 操作</button>
+      </div>
+
+      <!-- ----- アドレスタブ ----- -->
+      <div class="tab-panel" data-restriction-account-panel="address">
+        <p style="font-size:13px;color:#94a3b8;">
+          指定したアドレスからの受信、または指定したアドレスへの送信を許可／ブロックします。
+        </p>
+
+        <h3>現在の設定</h3>
+        <div id="restriction-current-address">読み込み中...</div>
+
+        <hr>
+
+        <label class="encrypt-option">
+          <input type="checkbox" id="restriction-address-block">
+          <span>ブロックリストにする（未チェックなら許可リスト）</span>
+        </label>
+        <label class="encrypt-option">
+          <input type="checkbox" id="restriction-address-outgoing">
+          <span>送信(自分発)に適用する（未チェックなら受信に適用）</span>
+        </label>
+
+        <p><b>追加するアドレス（1行に1つ）：</b></p>
+        <textarea id="restriction-address-add" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+
+        <p><b>削除するアドレス（1行に1つ）：</b></p>
+        <textarea id="restriction-address-remove" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+
+        <button id="restriction-address-submit" class="button-primary">この内容で設定する</button>
+        <div id="restriction-address-status"></div>
+      </div>
+
+      <!-- ----- モザイクタブ ----- -->
+      <div class="tab-panel" data-restriction-account-panel="mosaic" style="display:none;">
+        <p style="font-size:13px;color:#94a3b8;">
+          指定したモザイクの受信、または送信を許可／ブロックします。
+        </p>
+
+        <h3>現在の設定</h3>
+        <div id="restriction-current-mosaic">読み込み中...</div>
+
+        <hr>
+
+        <label class="encrypt-option">
+          <input type="checkbox" id="restriction-mosaic-block">
+          <span>ブロックリストにする（未チェックなら許可リスト）</span>
+        </label>
+        <label class="encrypt-option">
+          <input type="checkbox" id="restriction-mosaic-outgoing">
+          <span>送信(自分発)に適用する（未チェックなら受信に適用）</span>
+        </label>
+
+        <p><b>追加するモザイクID（1行に1つ、16進）：</b></p>
+        <textarea id="restriction-mosaic-add" class="input-box" placeholder="例: 72C0212E67A08BCE"></textarea>
+
+        <p><b>削除するモザイクID（1行に1つ、16進）：</b></p>
+        <textarea id="restriction-mosaic-remove" class="input-box" placeholder="例: 72C0212E67A08BCE"></textarea>
+
+        <button id="restriction-mosaic-submit" class="button-primary">この内容で設定する</button>
+        <div id="restriction-mosaic-status"></div>
+      </div>
+
+      <!-- ----- 操作タブ ----- -->
+      <div class="tab-panel" data-restriction-account-panel="operation" style="display:none;">
+        <p style="font-size:13px;color:#94a3b8;">
+          指定した種類のトランザクションの送信を許可／ブロックします（受信方向には適用できません）。
+        </p>
+
+        <h3>現在の設定</h3>
+        <div id="restriction-current-operation">読み込み中...</div>
+
+        <hr>
+
+        <label class="encrypt-option">
+          <input type="checkbox" id="restriction-operation-block">
+          <span>ブロックリストにする（未チェックなら許可リスト）</span>
+        </label>
+
+        <p><b>追加する種類：</b></p>
+        <select id="restriction-operation-add" class="input-box" multiple size="6"></select>
+
+        <p><b>削除する種類：</b></p>
+        <select id="restriction-operation-remove" class="input-box" multiple size="6"></select>
+
+        <button id="restriction-operation-submit" class="button-primary">この内容で設定する</button>
+        <div id="restriction-operation-status"></div>
       </div>
     </div>
   </div>
 
   <!-- ============================================================
-       モザイク制限サブメニュー
+       モザイク制限(グローバル制限 / アドレス制限をタブで切り替え)
   ============================================================ -->
-  <div id="restriction-mosaic-menu-page" class="page">
+  <div id="restriction-mosaicdef-page" class="page">
     <div class="card">
       <h2>モザイク制限</h2>
       <button id="back-restriction-menu-mosaic-top" class="button-primary">← 戻る</button>
@@ -1243,193 +1393,68 @@
         組み合わせて使います。制限を付けるにはモザイクが「制限設定可能(restrictable)」フラグ付きで作成されている必要があります。
       </p>
 
-      <div class="settings-menu">
-        <button id="menu-restriction-mosaic-global" class="settings-menu-item">
-          🌐 モザイクグローバル制限
-        </button>
-        <button id="menu-restriction-mosaic-address" class="settings-menu-item">
-          📍 モザイクアドレス制限
-        </button>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-restriction-mosaicdef-tab="global">🌐 グローバル制限</button>
+        <button class="tab-btn" data-restriction-mosaicdef-tab="address">📍 アドレス制限</button>
       </div>
-    </div>
-  </div>
 
-  <!-- ============================================================
-       アカウント制限(アドレス)
-  ============================================================ -->
-  <div id="restriction-address-page" class="page">
-    <div class="card">
-      <h2>アカウント制限（アドレス）</h2>
-      <button id="back-restriction-menu-address" class="button-primary">← 戻る</button>
+      <!-- ----- グローバル制限タブ ----- -->
+      <div class="tab-panel" data-restriction-mosaicdef-panel="global">
+        <p style="font-size:13px;color:#94a3b8;">
+          自分が作成したモザイクとやり取りするために、すべてのアカウントが満たすべき条件（キーと値のルール）を設定します。
+          初めて設定するキーの場合、旧制限値は「0」、旧制限タイプは「NONE」のままで構いません。
+        </p>
 
-      <p style="font-size:13px;color:#94a3b8;">
-        指定したアドレスからの受信、または指定したアドレスへの送信を許可／ブロックします。
-      </p>
+        <p><b>対象モザイクID（16進、自分が作成したもの）：</b></p>
+        <input id="mglobal-mosaic-id" class="input-box" placeholder="例: 72C0212E67A08BCE">
 
-      <h3>現在の設定</h3>
-      <div id="restriction-current-address">読み込み中...</div>
+        <p><b>参照モザイクID（任意。空欄なら対象モザイク自身を参照）：</b></p>
+        <input id="mglobal-reference-mosaic-id" class="input-box" placeholder="空欄可">
 
-      <hr>
+        <p><b>制限キー：</b></p>
+        <input id="mglobal-key" class="input-box" placeholder="例: KYC">
 
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-address-block">
-        <span>ブロックリストにする（未チェックなら許可リスト）</span>
-      </label>
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-address-outgoing">
-        <span>送信(自分発)に適用する（未チェックなら受信に適用）</span>
-      </label>
+        <p><b>旧制限値：</b></p>
+        <input id="mglobal-previous-value" class="input-box" type="number" min="0" value="0">
 
-      <p><b>追加するアドレス（1行に1つ）：</b></p>
-      <textarea id="restriction-address-add" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+        <p><b>新制限値：</b></p>
+        <input id="mglobal-new-value" class="input-box" type="number" min="0" value="1">
 
-      <p><b>削除するアドレス（1行に1つ）：</b></p>
-      <textarea id="restriction-address-remove" class="input-box" placeholder="NXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"></textarea>
+        <p><b>旧制限タイプ：</b></p>
+        <select id="mglobal-previous-type" class="input-box"></select>
 
-      <button id="restriction-address-submit" class="button-primary">この内容で設定する</button>
-      <div id="restriction-address-status"></div>
-    </div>
-  </div>
+        <p><b>新制限タイプ：</b></p>
+        <select id="mglobal-new-type" class="input-box"></select>
 
-  <!-- ============================================================
-       モザイク制限
-  ============================================================ -->
-  <div id="restriction-mosaic-page" class="page">
-    <div class="card">
-      <h2>モザイク制限</h2>
-      <button id="back-restriction-menu-mosaic" class="button-primary">← 戻る</button>
+        <button id="mglobal-submit" class="button-primary">この内容で設定する</button>
+        <div id="mglobal-status"></div>
+      </div>
 
-      <p style="font-size:13px;color:#94a3b8;">
-        指定したモザイクの受信、または送信を許可／ブロックします。
-      </p>
+      <!-- ----- アドレス制限タブ ----- -->
+      <div class="tab-panel" data-restriction-mosaicdef-panel="address" style="display:none;">
+        <p style="font-size:13px;color:#94a3b8;">
+          特定のアカウントに制限属性（値）を割り当てます。対応するモザイクグローバル制限の条件と比較され、
+          条件を満たしたアカウントだけがこのモザイクと取引できるようになります。
+        </p>
 
-      <h3>現在の設定</h3>
-      <div id="restriction-current-mosaic">読み込み中...</div>
+        <p><b>対象モザイクID（16進、自分が作成したもの）：</b></p>
+        <input id="maddress-mosaic-id" class="input-box" placeholder="例: 72C0212E67A08BCE">
 
-      <hr>
+        <p><b>制限キー（モザイクグローバル制限で使ったものと同じキー）：</b></p>
+        <input id="maddress-key" class="input-box" placeholder="例: KYC">
 
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-mosaic-block">
-        <span>ブロックリストにする（未チェックなら許可リスト）</span>
-      </label>
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-mosaic-outgoing">
-        <span>送信(自分発)に適用する（未チェックなら受信に適用）</span>
-      </label>
+        <p><b>対象アドレス：</b></p>
+        <input id="maddress-target" class="input-box" placeholder="値を割り当てたいアドレス">
 
-      <p><b>追加するモザイクID（1行に1つ、16進）：</b></p>
-      <textarea id="restriction-mosaic-add" class="input-box" placeholder="例: 72C0212E67A08BCE"></textarea>
+        <p><b>旧制限値（このアドレスに以前値を設定していなければ空欄のまま）：</b></p>
+        <input id="maddress-previous-value" class="input-box" placeholder="空欄可(未設定の場合は自動でFFFFFFFFFFFFFFFF扱い)">
 
-      <p><b>削除するモザイクID（1行に1つ、16進）：</b></p>
-      <textarea id="restriction-mosaic-remove" class="input-box" placeholder="例: 72C0212E67A08BCE"></textarea>
+        <p><b>新制限値：</b></p>
+        <input id="maddress-new-value" class="input-box" type="number" min="0" value="1">
 
-      <button id="restriction-mosaic-submit" class="button-primary">この内容で設定する</button>
-      <div id="restriction-mosaic-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       トランザクション制限(操作)
-  ============================================================ -->
-  <div id="restriction-operation-page" class="page">
-    <div class="card">
-      <h2>トランザクション制限</h2>
-      <button id="back-restriction-menu-operation" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        指定した種類のトランザクションの送信を許可／ブロックします（受信方向には適用できません）。
-      </p>
-
-      <h3>現在の設定</h3>
-      <div id="restriction-current-operation">読み込み中...</div>
-
-      <hr>
-
-      <label class="encrypt-option">
-        <input type="checkbox" id="restriction-operation-block">
-        <span>ブロックリストにする（未チェックなら許可リスト）</span>
-      </label>
-
-      <p><b>追加する種類：</b></p>
-      <select id="restriction-operation-add" class="input-box" multiple size="6"></select>
-
-      <p><b>削除する種類：</b></p>
-      <select id="restriction-operation-remove" class="input-box" multiple size="6"></select>
-
-      <button id="restriction-operation-submit" class="button-primary">この内容で設定する</button>
-      <div id="restriction-operation-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       モザイクグローバル制限
-  ============================================================ -->
-  <div id="restriction-mosaic-global-page" class="page">
-    <div class="card">
-      <h2>モザイクグローバル制限</h2>
-      <button id="back-restriction-menu-mosaic-global" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        自分が作成したモザイクとやり取りするために、すべてのアカウントが満たすべき条件（キーと値のルール）を設定します。
-        初めて設定するキーの場合、旧制限値は「0」、旧制限タイプは「NONE」のままで構いません。
-      </p>
-
-      <p><b>対象モザイクID（16進、自分が作成したもの）：</b></p>
-      <input id="mglobal-mosaic-id" class="input-box" placeholder="例: 72C0212E67A08BCE">
-
-      <p><b>参照モザイクID（任意。空欄なら対象モザイク自身を参照）：</b></p>
-      <input id="mglobal-reference-mosaic-id" class="input-box" placeholder="空欄可">
-
-      <p><b>制限キー：</b></p>
-      <input id="mglobal-key" class="input-box" placeholder="例: KYC">
-
-      <p><b>旧制限値：</b></p>
-      <input id="mglobal-previous-value" class="input-box" type="number" min="0" value="0">
-
-      <p><b>新制限値：</b></p>
-      <input id="mglobal-new-value" class="input-box" type="number" min="0" value="1">
-
-      <p><b>旧制限タイプ：</b></p>
-      <select id="mglobal-previous-type" class="input-box"></select>
-
-      <p><b>新制限タイプ：</b></p>
-      <select id="mglobal-new-type" class="input-box"></select>
-
-      <button id="mglobal-submit" class="button-primary">この内容で設定する</button>
-      <div id="mglobal-status"></div>
-    </div>
-  </div>
-
-  <!-- ============================================================
-       モザイクアドレス制限
-  ============================================================ -->
-  <div id="restriction-mosaic-address-page" class="page">
-    <div class="card">
-      <h2>モザイクアドレス制限</h2>
-      <button id="back-restriction-menu-mosaic-address" class="button-primary">← 戻る</button>
-
-      <p style="font-size:13px;color:#94a3b8;">
-        特定のアカウントに制限属性（値）を割り当てます。対応するモザイクグローバル制限の条件と比較され、
-        条件を満たしたアカウントだけがこのモザイクと取引できるようになります。
-      </p>
-
-      <p><b>対象モザイクID（16進、自分が作成したもの）：</b></p>
-      <input id="maddress-mosaic-id" class="input-box" placeholder="例: 72C0212E67A08BCE">
-
-      <p><b>制限キー（モザイクグローバル制限で使ったものと同じキー）：</b></p>
-      <input id="maddress-key" class="input-box" placeholder="例: KYC">
-
-      <p><b>対象アドレス：</b></p>
-      <input id="maddress-target" class="input-box" placeholder="値を割り当てたいアドレス">
-
-      <p><b>旧制限値（このアドレスに以前値を設定していなければ空欄のまま）：</b></p>
-      <input id="maddress-previous-value" class="input-box" placeholder="空欄可(未設定の場合は自動でFFFFFFFFFFFFFFFF扱い)">
-
-      <p><b>新制限値：</b></p>
-      <input id="maddress-new-value" class="input-box" type="number" min="0" value="1">
-
-      <button id="maddress-submit" class="button-primary">この内容で設定する</button>
-      <div id="maddress-status"></div>
+        <button id="maddress-submit" class="button-primary">この内容で設定する</button>
+        <div id="maddress-status"></div>
+      </div>
     </div>
   </div>
 
@@ -1548,7 +1573,39 @@
   </div>
 </dialog>
 
-<script type="module" src="js/index.js"></script>
+<button id="scroll-to-top-btn" class="scroll-to-top-btn" style="display:none;" aria-label="先頭に戻る">↑</button>
+
+<script>window.W = {};</script>
+<script src="js/config.js"></script>
+<script src="js/priceRates.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/ws.js"></script>
+<script src="js/account.js"></script>
+<script src="js/accountSwitcher.js"></script>
+<script src="js/nodeSelector.js"></script>
+<script src="js/sdk.js"></script>
+<script src="js/transactions.js"></script>
+<script src="js/txConfirm.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/apostille.js"></script>
+<script src="js/rentalFees.js"></script>
+<script src="js/namespace.js"></script>
+<script src="js/dataPage.js"></script>
+<script src="js/txStatusTracker.js"></script>
+<script src="js/harvest.js"></script>
+<script src="js/metadata.js"></script>
+<script src="js/mosaic.js"></script>
+<script src="js/multisend.js"></script>
+<script src="js/multisendRecipientCheck.js"></script>
+<script src="js/multisig.js"></script>
+<script src="js/offline.js"></script>
+<script src="js/recipientInfo.js"></script>
+<script src="js/restriction.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/sss.js"></script>
+<script src="js/transfer.js"></script>
+<script src="js/index.js"></script>
 
 </body>
 </html>
